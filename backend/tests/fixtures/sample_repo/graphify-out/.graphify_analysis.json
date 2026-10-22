@@ -1,0 +1,53 @@
+{
+  "communities": {
+    "0": [
+      "main",
+      "main_main",
+      "processor_metricprocessor",
+      "processor_metricprocessor_init"
+    ],
+    "1": [
+      "processor",
+      "processor_calculate_metrics",
+      "processor_metricprocessor_process"
+    ]
+  },
+  "cohesion": {
+    "0": 0.6666666666666666,
+    "1": 0.6666666666666666
+  },
+  "gods": [
+    {
+      "id": "processor_metricprocessor",
+      "label": "MetricProcessor",
+      "degree": 5
+    },
+    {
+      "id": "main_main",
+      "label": "main()",
+      "degree": 3
+    },
+    {
+      "id": "processor_calculate_metrics",
+      "label": "calculate_metrics()",
+      "degree": 2
+    }
+  ],
+  "surprises": [
+    {
+      "source": "main()",
+      "target": "MetricProcessor",
+      "source_files": [
+        "main.py",
+        "processor.py"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "calls",
+      "why": "cross-file semantic connection"
+    }
+  ],
+  "tokens": {
+    "input": 0,
+    "output": 0
+  }
+}
