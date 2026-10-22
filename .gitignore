@@ -29,6 +29,12 @@ dist/
 # Storage & Temporary Workspaces
 .storage/
 graphify-out/
+!backend/tests/fixtures/**/graphify-out/
+!backend/tests/fixtures/**/graphify-out/graph.json
+backend/tests/fixtures/**/graphify-out/cache/
+backend/tests/fixtures/**/graphify-out/*.html
+backend/tests/fixtures/**/graphify-out/.*
+backend/tests/fixtures/**/graphify-out/manifest.json
 *.log
 
 # OS & IDE

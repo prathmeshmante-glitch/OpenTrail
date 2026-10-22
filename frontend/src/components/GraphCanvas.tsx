@@ -55,6 +55,29 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
   const [pathSource, setPathSource] = useState<string>('');
   const [pathTarget, setPathTarget] = useState<string>('');
   const [showMiniMap, setShowMiniMap] = useState<boolean>(true);
+  const searchInputRef = React.useRef<HTMLInputElement>(null);
+
+  // Global keyboard shortcuts: '/' or Ctrl+K to search, Escape to reset
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't intercept when user is typing in another input/textarea
+      const targetTag = (e.target as HTMLElement)?.tagName?.toLowerCase();
+      const isInput = targetTag === 'input' || targetTag === 'textarea';
+
+      if ((e.key === '/' || ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k')) && !isInput) {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+        searchInputRef.current?.select();
+      } else if (e.key === 'Escape') {
+        searchInputRef.current?.blur();
+        setSearchTerm('');
+        onResetHighlights();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onResetHighlights]);
 
   // Map trail steps for quick node lookup
   const trailStepMap = useMemo(() => {
@@ -186,6 +209,48 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
     });
   }, [nodes, kindFilter, searchTerm]);
 
+  // Compute breakdown counts for filters
+  const kindCounts = useMemo(() => {
+    const counts = { all: nodes.length, class: 0, function: 0, file: 0, test: 0 };
+    nodes.forEach((n) => {
+      const k = (n.data as CustomNodeData)?.kind;
+      if (k === 'class') counts.class++;
+      else if (k === 'function' || k === 'method') counts.function++;
+      else if (k === 'file') counts.file++;
+      else if (k === 'test') counts.test++;
+    });
+    return counts;
+  }, [nodes]);
+
+  const relationCounts = useMemo(() => {
+    const counts = { all: graph.edges.length, calls: 0, imports: 0, contains: 0 };
+    graph.edges.forEach((e) => {
+      const rt = e.relationship_type.toLowerCase();
+      if (rt === 'calls') counts.calls++;
+      else if (rt === 'imports') counts.imports++;
+      else if (rt === 'contains') counts.contains++;
+    });
+    return counts;
+  }, [graph.edges]);
+
+  const hasActiveFiltersOrHighlights =
+    highlightedNodeIds.size > 0 ||
+    impactedNodeIds.size > 0 ||
+    Boolean(searchTerm) ||
+    relationFilter !== 'all' ||
+    kindFilter !== 'all' ||
+    Boolean(pathSource) ||
+    Boolean(pathTarget);
+
+  const handleResetAll = useCallback(() => {
+    setSearchTerm('');
+    setKindFilter('all');
+    setRelationFilter('all');
+    setPathSource('');
+    setPathTarget('');
+    onResetHighlights();
+  }, [onResetHighlights]);
+
   const onNodeClick = useCallback(
     (_: any, node: Node) => {
       const rawNode = graph.nodes.find((n) => n.id === node.id) || null;
@@ -223,18 +288,34 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
           <Search size={16} color="var(--color-ink-muted)" />
           <input
+            ref={searchInputRef}
             type="text"
-            placeholder="Search symbol or file..."
+            placeholder="Search (/ to focus)..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && filteredNodes.length > 0) {
+                const targetNode = graph.nodes.find((n) => n.id === filteredNodes[0].id) || null;
+                onSelectNode(targetNode);
+              }
+            }}
             style={{
               border: 'none',
               outline: 'none',
               fontFamily: 'var(--font-mono)',
               fontSize: '0.85rem',
-              width: '170px',
+              width: '160px',
             }}
+            title="Press '/' or Ctrl+K to search, Enter to select first match, Esc to clear"
           />
+          {searchTerm.trim() && (
+            <span
+              className="badge badge-lime"
+              style={{ fontSize: '0.65rem', padding: '0.1rem 0.35rem' }}
+            >
+              {filteredNodes.length} match{filteredNodes.length === 1 ? '' : 'es'}
+            </span>
+          )}
         </div>
 
         <div style={{ width: '1px', backgroundColor: 'var(--color-border)', margin: '0 0.25rem' }} />
@@ -247,9 +328,10 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
               key={k}
               className={`badge ${kindFilter === k ? 'badge-lime' : ''}`}
               onClick={() => setKindFilter(k)}
-              style={{ cursor: 'pointer', textTransform: 'capitalize' }}
+              style={{ cursor: 'pointer', textTransform: 'capitalize', fontSize: '0.72rem' }}
+              title={`Filter by ${k} (${kindCounts[k]} nodes)`}
             >
-              {k}
+              {k} <span style={{ opacity: 0.65, fontSize: '0.62rem' }}>({kindCounts[k]})</span>
             </button>
           ))}
         </div>
@@ -265,8 +347,9 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
               className={`badge ${relationFilter === r ? 'badge-blue' : ''}`}
               onClick={() => setRelationFilter(r)}
               style={{ cursor: 'pointer', textTransform: 'capitalize', fontSize: '0.7rem' }}
+              title={`Filter by ${r} (${relationCounts[r]} relationships)`}
             >
-              {r}
+              {r} <span style={{ opacity: 0.65, fontSize: '0.62rem' }}>({relationCounts[r]})</span>
             </button>
           ))}
         </div>
@@ -333,22 +416,30 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
           {showMiniMap ? 'Minimap On' : 'Minimap Off'}
         </button>
 
-        {(highlightedNodeIds.size > 0 || impactedNodeIds.size > 0 || searchTerm || relationFilter !== 'all' || kindFilter !== 'all') && (
-          <button
-            className="btn"
-            onClick={() => {
-              setSearchTerm('');
-              setKindFilter('all');
-              setRelationFilter('all');
-              onResetHighlights();
+        {/* Filter State Status & Reset */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', marginLeft: 'auto' }}>
+          <span
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: '0.72rem',
+              color: filteredNodes.length < nodes.length ? 'var(--color-coral)' : 'var(--color-ink-muted)',
+              fontWeight: 600,
             }}
-            style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem' }}
-            title="Reset highlight and filters"
           >
-            <RotateCcw size={12} />
-            Reset
-          </button>
-        )}
+            {filteredNodes.length}/{nodes.length} nodes
+          </span>
+          {hasActiveFiltersOrHighlights && (
+            <button
+              className="btn btn-secondary"
+              onClick={handleResetAll}
+              style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
+              title="Reset all filters, highlights, and path tracing"
+            >
+              <RotateCcw size={12} />
+              Reset All
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Main React Flow Canvas */}
