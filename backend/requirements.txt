@@ -7,3 +7,4 @@ google-genai>=1.0.0
 graphifyy>=0.9.93
 networkx>=3.0
 tree-sitter>=0.22.0
+python-dotenv>=1.0.0

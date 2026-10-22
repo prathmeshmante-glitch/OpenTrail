@@ -27,7 +27,7 @@ def test_deterministic_investigation_grounding(fixture_repo_dir):
         name="sample",
     )
     query_engine = GraphQueryEngine(graph)
-    orchestrator = AIOrchestrator()
+    orchestrator = AIOrchestrator(api_key="")
     
     # Test offline / deterministic grounding
     rec = orchestrator.investigate_issue(

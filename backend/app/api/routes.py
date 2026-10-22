@@ -5,7 +5,7 @@ from typing import List, Optional
 from fastapi import APIRouter, HTTPException, Query
 
 from backend.app.config import settings
-from backend.app.core.ai_orchestrator import ai_orchestrator
+from backend.app.core.ai_orchestrator import ai_orchestrator, sanitize_error_message
 from backend.app.core.graphify_adapter import GraphifyAdapter
 from backend.app.core.job_manager import job_manager
 from backend.app.core.security import SecurityValidationError
@@ -33,6 +33,28 @@ def get_health():
         ai_available=ai_orchestrator.is_available(),
         ai_model=settings.GEMMA_MODEL,
     )
+
+@router.get("/ai/verify")
+def verify_ai_model():
+    """
+    Verifies that the configured Gemma/Gemini model is accessible with the configured API key.
+    Never exposes secret values or credentials.
+    """
+    if not ai_orchestrator.is_available():
+        return {
+            "configured": False,
+            "accessible": False,
+            "model": settings.GEMMA_MODEL,
+            "message": "GEMINI_API_KEY is not configured.",
+        }
+    accessible, msg = ai_orchestrator.verify_model_accessibility()
+    return {
+        "configured": True,
+        "accessible": accessible,
+        "model": settings.GEMMA_MODEL,
+        "message": msg,
+    }
+
 
 @router.post("/repositories", response_model=JobStatusResponse)
 def submit_repository(req: RepositorySubmitRequest):
@@ -177,12 +199,13 @@ def create_investigation(repository_id: str, req: IssueInvestigationRequest):
         job_manager.store_investigation(resp)
         return resp
     except Exception as e:
+        safe_error = sanitize_error_message(str(e), ai_orchestrator.api_key)
         resp = InvestigationResponse(
             investigation_id=investigation_id,
             repository_id=repository_id,
             status="failed",
             recommendations=None,
-            error=f"Investigation failed: {str(e)[:200]}",
+            error=f"Investigation failed: {safe_error[:300]}",
             created_at=now,
         )
         job_manager.store_investigation(resp)

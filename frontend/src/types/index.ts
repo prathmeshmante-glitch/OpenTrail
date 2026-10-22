@@ -91,6 +91,8 @@ export interface InvestigationComponent {
   symbol_name: string | null;
   relevance_reason: string;
   is_verified: boolean;
+  line_start?: number | null;
+  line_end?: number | null;
 }
 
 export interface InvestigationRecommendation {

@@ -143,8 +143,26 @@ export function App() {
       const res = await api.createInvestigation(graph.repository_id, issueText, issueUrl);
       setInvestigation(res);
       if (res.recommendations?.relevant_components) {
-        const compIds = res.recommendations.relevant_components.map((c) => c.node_id);
-        setHighlightedNodeIds(new Set(compIds));
+        const verifiedComps = res.recommendations.relevant_components
+          .filter((c) => c.is_verified)
+          .map((c) => c.node_id);
+        const compIds =
+          verifiedComps.length > 0
+            ? verifiedComps
+            : res.recommendations.relevant_components.map((c) => c.node_id);
+        const nodeSet = new Set(compIds);
+        setHighlightedNodeIds(nodeSet);
+
+        // Compute actual connecting edges between validated nodes
+        const edgeIds = new Set<string>();
+        if (graph.edges) {
+          for (const edge of graph.edges) {
+            if (nodeSet.has(edge.source) && nodeSet.has(edge.target)) {
+              edgeIds.add(edge.id);
+            }
+          }
+        }
+        setHighlightedEdgeIds(edgeIds);
       }
     } catch (err: any) {
       alert(`Investigation failed: ${err.message}`);
@@ -253,12 +271,36 @@ export function App() {
               investigation={investigation}
               isLoading={isInvestigating}
               onHighlightComponents={(nodeIds) => {
-                setHighlightedNodeIds(new Set(nodeIds));
+                const nodeSet = new Set(nodeIds);
+                setHighlightedNodeIds(nodeSet);
+
+                // Highlight actual edges connecting these nodes
+                const edgeIds = new Set<string>();
+                if (graph?.edges) {
+                  for (const edge of graph.edges) {
+                    if (nodeSet.has(edge.source) && nodeSet.has(edge.target)) {
+                      edgeIds.add(edge.id);
+                    }
+                  }
+                }
+                setHighlightedEdgeIds(edgeIds);
                 setIsInvestigationOpen(false);
               }}
               onSelectComponent={(nodeId) => {
                 const node = graph.nodes.find((n) => n.id === nodeId);
-                if (node) setSelectedNode(node);
+                if (node) {
+                  setSelectedNode(node);
+                  setHighlightedNodeIds(new Set([nodeId]));
+                  const incidentEdges = new Set<string>();
+                  if (graph.edges) {
+                    for (const edge of graph.edges) {
+                      if (edge.source === nodeId || edge.target === nodeId) {
+                        incidentEdges.add(edge.id);
+                      }
+                    }
+                  }
+                  setHighlightedEdgeIds(incidentEdges);
+                }
                 setIsInvestigationOpen(false);
               }}
             />

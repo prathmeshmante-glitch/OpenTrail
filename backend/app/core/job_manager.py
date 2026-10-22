@@ -24,6 +24,7 @@ class JobManager:
         self._graphs: Dict[str, RepositoryGraph] = {}
         self._query_engines: Dict[str, GraphQueryEngine] = {}
         self._investigations: Dict[str, InvestigationResponse] = {}
+        self._repo_dirs: Dict[str, str] = {}
         self._adapter = GraphifyAdapter()
         os.makedirs(settings.STORAGE_DIR, exist_ok=True)
 
@@ -33,11 +34,46 @@ class JobManager:
 
     def get_graph(self, repository_id: str) -> Optional[RepositoryGraph]:
         with self._lock:
-            return self._graphs.get(repository_id)
+            if repository_id in self._graphs:
+                return self._graphs[repository_id]
+
+            # Attempt automatic rehydration from disk storage
+            candidates = [
+                os.path.join(settings.STORAGE_DIR, repository_id),
+                os.path.join(settings.STORAGE_DIR, f"{repository_id}_test"),
+            ]
+            for candidate_dir in candidates:
+                graph_json = os.path.join(candidate_dir, "graphify-out", "graph.json")
+                if os.path.isdir(candidate_dir) and os.path.isfile(graph_json):
+                    parts = repository_id.split("_", 1)
+                    owner = parts[0]
+                    name = parts[1] if len(parts) > 1 else repository_id
+                    try:
+                        graph = self._adapter.parse_graph(candidate_dir, repository_id, owner, name)
+                        self._graphs[repository_id] = graph
+                        self._query_engines[repository_id] = GraphQueryEngine(graph, repo_dir=candidate_dir)
+                        self._repo_dirs[repository_id] = candidate_dir
+                        return graph
+                    except Exception:
+                        pass
+            return None
 
     def get_query_engine(self, repository_id: str) -> Optional[GraphQueryEngine]:
         with self._lock:
+            if repository_id in self._query_engines:
+                return self._query_engines[repository_id]
+        # Rehydrate if available on disk
+        self.get_graph(repository_id)
+        with self._lock:
             return self._query_engines.get(repository_id)
+
+    def get_repo_dir(self, repository_id: str) -> Optional[str]:
+        with self._lock:
+            if repository_id in self._repo_dirs:
+                return self._repo_dirs[repository_id]
+        self.get_graph(repository_id)
+        with self._lock:
+            return self._repo_dirs.get(repository_id)
 
     def get_investigation(self, investigation_id: str) -> Optional[InvestigationResponse]:
         with self._lock:
@@ -108,7 +144,8 @@ class JobManager:
         )
         with self._lock:
             self._graphs[repository_id] = graph
-            self._query_engines[repository_id] = GraphQueryEngine(graph)
+            self._repo_dirs[repository_id] = repo_dir
+            self._query_engines[repository_id] = GraphQueryEngine(graph, repo_dir=repo_dir)
         return graph
 
     def _update_job(
@@ -136,7 +173,9 @@ class JobManager:
     def _process_repository_job(
         self, job_id: str, repository_id: str, canonical_url: str, owner: str, repo: str
     ):
-        target_dir = os.path.join(settings.STORAGE_DIR, f"{owner}_{repo}_{uuid.uuid4().hex[:6]}")
+        target_dir = os.path.join(settings.STORAGE_DIR, repository_id)
+        # If target_dir already exists, clean it up before a fresh clone
+        safe_remove_tree(target_dir)
         try:
             # Stage 2: Fetching
             self._update_job(job_id, JobStage.FETCHING, 30, f"Cloning shallow source for {owner}/{repo}...")
@@ -158,7 +197,8 @@ class JobManager:
 
             with self._lock:
                 self._graphs[repository_id] = graph
-                self._query_engines[repository_id] = GraphQueryEngine(graph)
+                self._repo_dirs[repository_id] = target_dir
+                self._query_engines[repository_id] = GraphQueryEngine(graph, repo_dir=target_dir)
 
             # Stage 5: Ready
             self._update_job(
@@ -169,6 +209,8 @@ class JobManager:
             )
 
         except Exception as e:
+            # Cleanup on failure
+            safe_remove_tree(target_dir)
             self._update_job(
                 job_id,
                 JobStage.FAILED,
@@ -176,9 +218,5 @@ class JobManager:
                 "Analysis failed.",
                 error=str(e),
             )
-        finally:
-            # Cleanup temporary source clone workspace to prevent disk bloat
-            # Note: The parsed graph is safely held in memory!
-            safe_remove_tree(target_dir)
 
 job_manager = JobManager()

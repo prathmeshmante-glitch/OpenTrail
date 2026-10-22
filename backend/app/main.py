@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from backend.app.api.routes import router
 from backend.app.config import settings
+from backend.app.core.ai_orchestrator import ai_orchestrator
 from backend.app.core.job_manager import job_manager
 
 logging.basicConfig(
@@ -18,6 +19,7 @@ async def lifespan(app: FastAPI):
     logger.info("Initializing OpenTrail backend service...")
     logger.info(f"Using Python executable: {settings.PYTHON_EXECUTABLE}")
     logger.info(f"Gemma model: {settings.GEMMA_MODEL}")
+    logger.info(f"AI Service configured: {ai_orchestrator.is_available()}")
     
     # Pre-register fixture sample repo if available
     fixture_dir = os.path.join(os.path.dirname(__file__), "..", "tests", "fixtures", "sample_repo")

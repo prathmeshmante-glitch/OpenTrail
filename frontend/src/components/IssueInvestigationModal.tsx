@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Sparkles, CheckCircle, Bug, ListChecks, ArrowRight } from 'lucide-react';
+import { X, Sparkles, CheckCircle, Bug, ListChecks, ArrowRight, AlertTriangle, Share2 } from 'lucide-react';
 import type { InvestigationRecommendation, InvestigationResponse } from '../types';
 
 interface IssueInvestigationModalProps {
@@ -155,6 +155,31 @@ export const IssueInvestigationModal: React.FC<IssueInvestigationModalProps> = (
             </div>
           </form>
 
+          {/* AI / Investigation Error Banner */}
+          {investigation?.error && (
+            <div
+              style={{
+                padding: '0.85rem 1rem',
+                border: 'var(--border-thick)',
+                backgroundColor: '#FFEBE8',
+                borderColor: '#D32F2F',
+                boxShadow: 'var(--shadow-offset-sm)',
+                marginBottom: '1.25rem',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.35rem',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#D32F2F', fontWeight: 800, fontSize: '0.9rem' }}>
+                <AlertTriangle size={18} />
+                <span>AI SERVICE ERROR</span>
+              </div>
+              <p style={{ fontSize: '0.85rem', color: '#B71C1C', margin: 0, lineHeight: 1.4 }}>
+                {investigation.error}
+              </p>
+            </div>
+          )}
+
           {/* Investigation Results */}
           {rec && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
@@ -171,7 +196,14 @@ export const IssueInvestigationModal: React.FC<IssueInvestigationModalProps> = (
                   <span className="badge badge-lime">INVESTIGATION SUMMARY</span>
                   <button
                     className="btn btn-primary"
-                    onClick={() => onHighlightComponents(rec.relevant_components.map((c) => c.node_id))}
+                    onClick={() => {
+                      const verified = rec.relevant_components
+                        .filter((c) => c.is_verified)
+                        .map((c) => c.node_id);
+                      onHighlightComponents(
+                        verified.length > 0 ? verified : rec.relevant_components.map((c) => c.node_id)
+                      );
+                    }}
                     style={{ padding: '0.25rem 0.65rem', fontSize: '0.75rem' }}
                   >
                     Highlight All on Canvas
@@ -220,14 +252,79 @@ export const IssueInvestigationModal: React.FC<IssueInvestigationModalProps> = (
                           </span>
                         )}
                       </div>
-                      <div style={{ fontSize: '0.75rem', color: 'var(--color-ink-muted)', marginBottom: '0.35rem' }}>
-                        {comp.file_path}
+                      <div style={{ fontSize: '0.75rem', color: 'var(--color-ink-muted)', marginBottom: '0.35rem', display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+                        <span>{comp.file_path}</span>
+                        {comp.line_start != null && (
+                          <span
+                            style={{
+                              fontFamily: 'var(--font-mono)',
+                              fontSize: '0.7rem',
+                              padding: '0.05rem 0.3rem',
+                              backgroundColor: 'var(--color-paper)',
+                              border: '1px solid var(--color-ink)',
+                              fontWeight: 700,
+                              color: 'var(--color-ink)',
+                            }}
+                          >
+                            {comp.line_end && comp.line_end !== comp.line_start
+                              ? `L${comp.line_start}-L${comp.line_end}`
+                              : `L${comp.line_start}`}
+                          </span>
+                        )}
                       </div>
                       <p style={{ fontSize: '0.8rem' }}>{comp.relevance_reason}</p>
                     </div>
                   ))}
                 </div>
               </div>
+
+              {/* Call Relationships & Graph Evidence */}
+              {rec.confirmed_relationships && rec.confirmed_relationships.length > 0 && (
+                <div
+                  style={{
+                    padding: '0.85rem',
+                    border: 'var(--border-thin)',
+                    backgroundColor: 'var(--color-paper)',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 800, fontSize: '0.85rem', marginBottom: '0.5rem' }}>
+                    <Share2 size={16} />
+                    CALL RELATIONSHIPS & GRAPH EVIDENCE
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                    {rec.confirmed_relationships.map((rel, idx) => {
+                      const isVerified = rel.startsWith('[Verified AST Edge]');
+                      const cleanText = rel.replace(/^\[(Verified AST Edge|Model Inferred Relationship)\]\s*/, '');
+                      return (
+                        <div
+                          key={idx}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            padding: '0.35rem 0.6rem',
+                            backgroundColor: '#FFFFFF',
+                            border: '1px solid var(--color-ink)',
+                            fontSize: '0.8rem',
+                            fontFamily: 'var(--font-mono)',
+                          }}
+                        >
+                          <span>{cleanText}</span>
+                          {isVerified ? (
+                            <span className="badge badge-lime" style={{ fontSize: '0.65rem' }}>
+                              Direct AST Edge
+                            </span>
+                          ) : (
+                            <span className="badge badge-coral" style={{ fontSize: '0.65rem' }}>
+                              Model Inferred
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               {/* Recommended Testing & Next Steps */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
@@ -243,9 +340,26 @@ export const IssueInvestigationModal: React.FC<IssueInvestigationModalProps> = (
                     SUGGESTED TESTS
                   </div>
                   <ul style={{ paddingLeft: '1.2rem', fontSize: '0.8rem', lineHeight: 1.6 }}>
-                    {rec.suggested_tests.map((t, idx) => (
-                      <li key={idx}>{t}</li>
-                    ))}
+                    {rec.suggested_tests.map((t, idx) => {
+                      const isExisting = t.startsWith('[Existing Test]');
+                      const isProposed = t.startsWith('[Proposed New Test]');
+                      const cleanTest = t.replace(/^\[(Existing Test|Proposed New Test)\]\s*/, '');
+                      return (
+                        <li key={idx} style={{ marginBottom: '0.25rem' }}>
+                          {isExisting && (
+                            <span className="badge badge-lime" style={{ fontSize: '0.65rem', marginRight: '0.4rem' }}>
+                              Existing Test
+                            </span>
+                          )}
+                          {isProposed && (
+                            <span className="badge badge-coral" style={{ fontSize: '0.65rem', marginRight: '0.4rem' }}>
+                              Proposed New Test
+                            </span>
+                          )}
+                          <span>{cleanTest}</span>
+                        </li>
+                      );
+                    })}
                   </ul>
                 </div>
 

@@ -96,8 +96,10 @@ class InvestigationComponent(BaseModel):
     label: str
     file_path: str
     symbol_name: Optional[str] = None
+    line_start: Optional[int] = None
+    line_end: Optional[int] = None
     relevance_reason: str
-    is_verified: bool = True
+    is_verified: bool = False
 
 class InvestigationRecommendation(BaseModel):
     issue_summary: str
