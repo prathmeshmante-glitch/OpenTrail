@@ -4,13 +4,14 @@ import {
   Controls,
   Background,
   MiniMap,
+  Panel,
   useNodesState,
   useEdgesState,
   MarkerType,
 } from '@xyflow/react';
 import type { Node, Edge } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { Search, Filter, Route, RotateCcw, Share2 } from 'lucide-react';
+import { Search, Filter, Route, RotateCcw, Share2, Map as MapIcon } from 'lucide-react';
 import { CustomNode } from './CustomNode';
 import type { CustomNodeData } from './CustomNode';
 import type { GraphNode, RepositoryGraph, ExecutionTrailResponse } from '../types';
@@ -53,6 +54,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
   const [relationFilter, setRelationFilter] = useState<string>('all');
   const [pathSource, setPathSource] = useState<string>('');
   const [pathTarget, setPathTarget] = useState<string>('');
+  const [showMiniMap, setShowMiniMap] = useState<boolean>(true);
   const searchInputRef = React.useRef<HTMLInputElement>(null);
 
   // Global keyboard shortcuts: '/' or Ctrl+K to search, Escape to reset
@@ -404,6 +406,16 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
           </button>
         </div>
 
+        <button
+          className={`btn ${showMiniMap ? 'btn-secondary' : ''}`}
+          onClick={() => setShowMiniMap(!showMiniMap)}
+          style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
+          title={showMiniMap ? 'Hide overview minimap' : 'Show overview minimap'}
+        >
+          <MapIcon size={12} />
+          {showMiniMap ? 'Minimap On' : 'Minimap Off'}
+        </button>
+
         {/* Filter State Status & Reset */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', marginLeft: 'auto' }}>
           <span
@@ -444,23 +456,44 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       >
         <Background color="#D3CDBC" gap={24} size={1.5} />
         <Controls position="bottom-left" showInteractive={false} />
-        <MiniMap
-          position="bottom-right"
-          nodeColor={(n: any) => {
-            if (n.data?.isDirectImpact) return 'var(--color-coral)';
-            if (n.data?.isTransitiveImpact) return '#FFA726';
-            if (n.data?.isTrailStep) return 'var(--color-cobalt-blue)';
-            if (n.data?.isHighlighted) return 'var(--color-electric-lime)';
-            if (n.data?.kind === 'class') return 'var(--color-cobalt-blue)';
-            return '#FFFFFF';
-          }}
-          style={{
-            border: 'var(--border-thick)',
-            boxShadow: 'var(--shadow-offset-sm)',
-            borderRadius: 0,
-            backgroundColor: '#FFFFFF',
-          }}
-        />
+        {showMiniMap ? (
+          <MiniMap
+            position="bottom-right"
+            nodeColor={(n: any) => {
+              if (n.data?.isDirectImpact) return 'var(--color-coral)';
+              if (n.data?.isTransitiveImpact) return '#FFA726';
+              if (n.data?.isTrailStep) return 'var(--color-cobalt-blue)';
+              if (n.data?.isHighlighted) return 'var(--color-electric-lime)';
+              if (n.data?.kind === 'class') return 'var(--color-cobalt-blue)';
+              return '#FFFFFF';
+            }}
+            style={{
+              border: 'var(--border-thick)',
+              boxShadow: 'var(--shadow-offset-sm)',
+              borderRadius: 0,
+              backgroundColor: '#FFFFFF',
+            }}
+          />
+        ) : (
+          <Panel position="bottom-right">
+            <button
+              className="btn btn-secondary"
+              onClick={() => setShowMiniMap(true)}
+              style={{
+                padding: '0.25rem 0.6rem',
+                fontSize: '0.75rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.35rem',
+                backgroundColor: 'var(--color-paper)',
+              }}
+              title="Expand overview minimap"
+            >
+              <MapIcon size={13} />
+              Show Minimap
+            </button>
+          </Panel>
+        )}
       </ReactFlow>
     </div>
   );
