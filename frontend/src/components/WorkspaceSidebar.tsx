@@ -1,17 +1,21 @@
 import React from 'react';
-import { Sparkles, Layers, Cpu } from 'lucide-react';
+import { Sparkles, Layers, Cpu, ShieldCheck, Compass } from 'lucide-react';
 import type { GraphNode, RepositoryGraph } from '../types';
 
 interface WorkspaceSidebarProps {
   graph: RepositoryGraph;
   onSelectNode: (node: GraphNode) => void;
   onOpenInvestigation: () => void;
+  onOpenFirstContribution?: () => void;
+  onOpenTestMap?: () => void;
 }
 
 export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
   graph,
   onSelectNode,
   onOpenInvestigation,
+  onOpenFirstContribution,
+  onOpenTestMap,
 }) => {
   return (
     <aside
@@ -25,16 +29,42 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
         overflowY: 'auto',
       }}
     >
-      {/* Investigation Trigger Card */}
-      <div style={{ padding: '1rem', borderBottom: 'var(--border-thick)' }}>
+      {/* Primary Action Buttons */}
+      <div style={{ padding: '1rem', borderBottom: 'var(--border-thick)', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
         <button
           className="btn btn-primary"
           onClick={onOpenInvestigation}
-          style={{ width: '100%', padding: '0.85rem' }}
+          style={{ width: '100%', padding: '0.75rem', justifyContent: 'center' }}
         >
           <Sparkles size={18} />
           Investigate Issue
         </button>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.4rem' }}>
+          {onOpenTestMap && (
+            <button
+              className="btn"
+              onClick={onOpenTestMap}
+              style={{ padding: '0.45rem', fontSize: '0.75rem', justifyContent: 'center' }}
+              title="View discovered regression tests"
+            >
+              <ShieldCheck size={14} />
+              Test Map
+            </button>
+          )}
+
+          {onOpenFirstContribution && (
+            <button
+              className="btn badge-lime"
+              onClick={onOpenFirstContribution}
+              style={{ padding: '0.45rem', fontSize: '0.75rem', justifyContent: 'center' }}
+              title="Guided onboarding for newcomers"
+            >
+              <Compass size={14} />
+              First Contrib
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Metrics Card */}

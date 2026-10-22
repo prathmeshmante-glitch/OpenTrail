@@ -86,4 +86,63 @@ export const api = {
     const res = await fetch(`${API_BASE}/investigations/${investigationId}`);
     return handleResponse<InvestigationResponse>(res);
   },
+
+  async simulateChangeImpact(
+    repositoryId: string,
+    nodeId: string,
+    depth: number = 2
+  ): Promise<import('../types').ImpactSimulationResponse> {
+    const params = new URLSearchParams({ node_id: nodeId, depth: depth.toString() });
+    const res = await fetch(`${API_BASE}/repositories/${repositoryId}/impact?${params}`);
+    return handleResponse<import('../types').ImpactSimulationResponse>(res);
+  },
+
+  async getSmartTestMap(
+    repositoryId: string,
+    target?: string
+  ): Promise<import('../types').TestMapResponse> {
+    const params = target ? `?target=${encodeURIComponent(target)}` : '';
+    const res = await fetch(`${API_BASE}/repositories/${repositoryId}/tests${params}`);
+    return handleResponse<import('../types').TestMapResponse>(res);
+  },
+
+  async getExecutionTrail(
+    repositoryId: string,
+    startNodeId: string,
+    endNodeId?: string,
+    steps: number = 6
+  ): Promise<import('../types').ExecutionTrailResponse> {
+    const params = new URLSearchParams({ start: startNodeId, steps: steps.toString() });
+    if (endNodeId) {
+      params.append('end', endNodeId);
+    }
+    const res = await fetch(`${API_BASE}/repositories/${repositoryId}/trail?${params}`);
+    return handleResponse<import('../types').ExecutionTrailResponse>(res);
+  },
+
+  async explainWhyThisFile(
+    repositoryId: string,
+    filePath: string,
+    issueText?: string
+  ): Promise<import('../types').WhyThisFileResponse> {
+    const params = new URLSearchParams({ file_path: filePath });
+    if (issueText) {
+      params.append('issue_text', issueText);
+    }
+    const res = await fetch(`${API_BASE}/repositories/${repositoryId}/why-file?${params}`);
+    return handleResponse<import('../types').WhyThisFileResponse>(res);
+  },
+
+  async generateFirstContributionPlan(
+    repositoryId: string,
+    issueText: string,
+    issueUrl?: string
+  ): Promise<import('../types').FirstContributionPlan> {
+    const res = await fetch(`${API_BASE}/repositories/${repositoryId}/first-contribution`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ issue_text: issueText, issue_url: issueUrl || null }),
+    });
+    return handleResponse<import('../types').FirstContributionPlan>(res);
+  },
 };

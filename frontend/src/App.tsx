@@ -6,6 +6,10 @@ import { WorkspaceSidebar } from './components/WorkspaceSidebar';
 import { GraphCanvas } from './components/GraphCanvas';
 import { DetailPanel } from './components/DetailPanel';
 import { IssueInvestigationModal } from './components/IssueInvestigationModal';
+import { WhyThisFileModal } from './components/WhyThisFileModal';
+import { TestMapModal } from './components/TestMapModal';
+import { FirstContributionModal } from './components/FirstContributionModal';
+import { ExecutionTrailBar } from './components/ExecutionTrailBar';
 import { api } from './services/api';
 import type {
   GraphNode,
@@ -13,6 +17,8 @@ import type {
   InvestigationResponse,
   JobStatusResponse,
   RepositoryGraph,
+  ImpactSimulationResponse,
+  ExecutionTrailResponse,
 } from './types';
 
 export function App() {
@@ -23,6 +29,8 @@ export function App() {
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
   const [highlightedNodeIds, setHighlightedNodeIds] = useState<Set<string>>(new Set());
   const [impactedNodeIds, setImpactedNodeIds] = useState<Set<string>>(new Set());
+  const [directImpactNodeIds, setDirectImpactNodeIds] = useState<Set<string>>(new Set());
+  const [transitiveImpactNodeIds, setTransitiveImpactNodeIds] = useState<Set<string>>(new Set());
   const [highlightedEdgeIds, setHighlightedEdgeIds] = useState<Set<string>>(new Set());
   const [notification, setNotification] = useState<string | null>(null);
 
@@ -30,6 +38,23 @@ export function App() {
   const [isInvestigationOpen, setIsInvestigationOpen] = useState(false);
   const [investigation, setInvestigation] = useState<InvestigationResponse | null>(null);
   const [isInvestigating, setIsInvestigating] = useState(false);
+
+  // Impact Simulation state
+  const [impactResult, setImpactResult] = useState<ImpactSimulationResponse | null>(null);
+
+  // Execution Trail state
+  const [executionTrail, setExecutionTrail] = useState<ExecutionTrailResponse | null>(null);
+  const [trailCurrentStepIndex, setTrailCurrentStepIndex] = useState(0);
+
+  // Test Map state
+  const [isTestMapOpen, setIsTestMapOpen] = useState(false);
+  const [testMapTarget, setTestMapTarget] = useState<string | undefined>(undefined);
+
+  // First Contribution state
+  const [isFirstContributionOpen, setIsFirstContributionOpen] = useState(false);
+
+  // Why This File state
+  const [whyThisFileModalPath, setWhyThisFileModalPath] = useState<string | null>(null);
 
   // Poll timer ref
   const pollTimerRef = useRef<number | null>(null);
@@ -92,7 +117,11 @@ export function App() {
       setSelectedNode(null);
       setHighlightedNodeIds(new Set());
       setImpactedNodeIds(new Set());
+      setDirectImpactNodeIds(new Set());
+      setTransitiveImpactNodeIds(new Set());
       setHighlightedEdgeIds(new Set());
+      setImpactResult(null);
+      setExecutionTrail(null);
       setView('workspace');
       setNotification('Loaded demonstration fixture: opentrail/sample');
     } catch (err: any) {
@@ -100,12 +129,16 @@ export function App() {
     }
   };
 
-  // Reset highlights
+  // Reset highlights and states
   const handleResetHighlights = useCallback(() => {
     setHighlightedNodeIds(new Set());
     setImpactedNodeIds(new Set());
+    setDirectImpactNodeIds(new Set());
+    setTransitiveImpactNodeIds(new Set());
     setHighlightedEdgeIds(new Set());
     setSelectedNode(null);
+    setImpactResult(null);
+    setExecutionTrail(null);
     setNotification(null);
   }, []);
 
@@ -123,15 +156,94 @@ export function App() {
     }
   };
 
-  // Check downstream impact
-  const handleCheckImpact = async (nodeId: string) => {
+  // Simulate change impact (Feature Two)
+  const handleSimulateImpact = async (nodeId: string, depth: number) => {
     if (!graph) return;
     try {
-      const affected = await api.getAffectedNodes(graph.repository_id, nodeId);
-      setImpactedNodeIds(new Set(affected));
-      setNotification(`Identified ${affected.length} downstream component(s) impacted by ${nodeId}`);
+      const res = await api.simulateChangeImpact(graph.repository_id, nodeId, depth);
+      setImpactResult(res);
+
+      const direct = new Set<string>();
+      const transitive = new Set<string>();
+      res.impacted_nodes.forEach((n) => {
+        if (n.is_direct) direct.add(n.node_id);
+        else transitive.add(n.node_id);
+      });
+
+      setDirectImpactNodeIds(direct);
+      setTransitiveImpactNodeIds(transitive);
+      setImpactedNodeIds(new Set([...direct, ...transitive]));
+
+      // Highlight edges involved in affected paths
+      const edgeIds = new Set<string>();
+      for (const path of res.affected_paths) {
+        for (let i = 0; i < path.length - 1; i++) {
+          const u = path[i];
+          const v = path[i + 1];
+          const edge = graph.edges.find(
+            (e) => (e.source === u && e.target === v) || (e.source === v && e.target === u)
+          );
+          if (edge) edgeIds.add(edge.id);
+        }
+      }
+      setHighlightedEdgeIds(edgeIds);
+      setNotification(
+        `Impact simulation complete: ${res.direct_impact_count} direct, ${res.transitive_impact_count} transitive dependent(s) up to ${depth} hop(s).`
+      );
     } catch (err: any) {
-      setNotification(`Impact check failed: ${err.message}`);
+      setNotification(`Impact simulation failed: ${err.message}`);
+    }
+  };
+
+  // Clear impact simulation
+  const handleClearImpact = () => {
+    setImpactResult(null);
+    setDirectImpactNodeIds(new Set());
+    setTransitiveImpactNodeIds(new Set());
+    setImpactedNodeIds(new Set());
+    setHighlightedEdgeIds(new Set());
+  };
+
+  // Request execution trail (Feature Four)
+  const handleRequestTrail = async (startNodeId: string, endNodeId?: string) => {
+    if (!graph) return;
+    try {
+      const res = await api.getExecutionTrail(graph.repository_id, startNodeId, endNodeId, 6);
+      setExecutionTrail(res);
+      setTrailCurrentStepIndex(0);
+
+      // Focus first step
+      const firstStepNode = graph.nodes.find((n) => n.id === startNodeId);
+      if (firstStepNode) setSelectedNode(firstStepNode);
+
+      // Highlight trail nodes
+      setHighlightedNodeIds(new Set(res.trail_path));
+
+      // Highlight trail edges
+      const edgeIds = new Set<string>();
+      for (let i = 0; i < res.trail_path.length - 1; i++) {
+        const u = res.trail_path[i];
+        const v = res.trail_path[i + 1];
+        const edge = graph.edges.find(
+          (e) => (e.source === u && e.target === v) || (e.source === v && e.target === u)
+        );
+        if (edge) edgeIds.add(edge.id);
+      }
+      setHighlightedEdgeIds(edgeIds);
+      setNotification(`Interactive Execution Trail active: ${res.total_hops} hops loaded.`);
+    } catch (err: any) {
+      setNotification(`Execution trail failed: ${err.message}`);
+    }
+  };
+
+  // Stepper hop change for execution trail
+  const handleTrailStepChange = (index: number) => {
+    if (!executionTrail || !graph) return;
+    setTrailCurrentStepIndex(index);
+    const step = executionTrail.steps[index];
+    if (step) {
+      const node = graph.nodes.find((n) => n.id === step.node_id);
+      if (node) setSelectedNode(node);
     }
   };
 
@@ -171,12 +283,34 @@ export function App() {
     }
   };
 
+  // Focus a node from modals
+  const handleFocusNode = (nodeId: string) => {
+    if (!graph) return;
+    const node = graph.nodes.find((n) => n.id === nodeId);
+    if (node) {
+      setSelectedNode(node);
+      setHighlightedNodeIds(new Set([nodeId]));
+      const incidentEdges = new Set<string>();
+      for (const edge of graph.edges) {
+        if (edge.source === nodeId || edge.target === nodeId) {
+          incidentEdges.add(edge.id);
+        }
+      }
+      setHighlightedEdgeIds(incidentEdges);
+    }
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
       <TopNav
         currentRepo={graph ? `${graph.owner}/${graph.name}` : null}
         onNewAnalysis={() => setView('landing')}
         onLoadSample={handleLoadSample}
+        onOpenFirstContribution={() => setIsFirstContributionOpen(true)}
+        onOpenTestMap={() => {
+          setTestMapTarget(selectedNode?.symbol_name || undefined);
+          setIsTestMapOpen(true);
+        }}
         health={health}
       />
 
@@ -192,6 +326,7 @@ export function App() {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
+            zIndex: 30,
           }}
         >
           <span>{notification}</span>
@@ -238,6 +373,11 @@ export function App() {
               graph={graph}
               onSelectNode={(node) => setSelectedNode(node)}
               onOpenInvestigation={() => setIsInvestigationOpen(true)}
+              onOpenFirstContribution={() => setIsFirstContributionOpen(true)}
+              onOpenTestMap={() => {
+                setTestMapTarget(selectedNode?.symbol_name || undefined);
+                setIsTestMapOpen(true);
+              }}
             />
 
             {/* Central Graph Canvas */}
@@ -248,9 +388,21 @@ export function App() {
                 onSelectNode={(node) => setSelectedNode(node)}
                 highlightedNodeIds={highlightedNodeIds}
                 impactedNodeIds={impactedNodeIds}
+                directImpactNodeIds={directImpactNodeIds}
+                transitiveImpactNodeIds={transitiveImpactNodeIds}
                 highlightedEdgeIds={highlightedEdgeIds}
                 onResetHighlights={handleResetHighlights}
                 onRequestPath={handleRequestPath}
+                executionTrail={executionTrail}
+                trailCurrentStepIndex={trailCurrentStepIndex}
+              />
+
+              {/* Floating Execution Trail Stepper Bar (Feature Four) */}
+              <ExecutionTrailBar
+                trail={executionTrail}
+                currentStepIndex={trailCurrentStepIndex}
+                onStepChange={handleTrailStepChange}
+                onReset={() => setExecutionTrail(null)}
               />
 
               {/* Contextual Detail Panel */}
@@ -259,11 +411,16 @@ export function App() {
                 graph={graph}
                 onClose={() => setSelectedNode(null)}
                 onSelectNode={(node) => setSelectedNode(node)}
-                onCheckImpact={handleCheckImpact}
+                onCheckImpact={(nodeId) => handleSimulateImpact(nodeId, 2)}
+                onSimulateImpact={handleSimulateImpact}
+                onRequestTrail={(nodeId) => handleRequestTrail(nodeId)}
+                onExplainFile={(filePath) => setWhyThisFileModalPath(filePath)}
+                impactResult={impactResult}
+                onClearImpact={handleClearImpact}
               />
             </div>
 
-            {/* Issue Investigation Modal */}
+            {/* Issue Investigation Modal (Features One & Six) */}
             <IssueInvestigationModal
               isOpen={isInvestigationOpen}
               onClose={() => setIsInvestigationOpen(false)}
@@ -274,7 +431,6 @@ export function App() {
                 const nodeSet = new Set(nodeIds);
                 setHighlightedNodeIds(nodeSet);
 
-                // Highlight actual edges connecting these nodes
                 const edgeIds = new Set<string>();
                 if (graph?.edges) {
                   for (const edge of graph.edges) {
@@ -287,23 +443,50 @@ export function App() {
                 setIsInvestigationOpen(false);
               }}
               onSelectComponent={(nodeId) => {
-                const node = graph.nodes.find((n) => n.id === nodeId);
-                if (node) {
-                  setSelectedNode(node);
-                  setHighlightedNodeIds(new Set([nodeId]));
-                  const incidentEdges = new Set<string>();
-                  if (graph.edges) {
-                    for (const edge of graph.edges) {
-                      if (edge.source === nodeId || edge.target === nodeId) {
-                        incidentEdges.add(edge.id);
-                      }
-                    }
-                  }
-                  setHighlightedEdgeIds(incidentEdges);
-                }
+                handleFocusNode(nodeId);
                 setIsInvestigationOpen(false);
               }}
+              onExplainFile={(filePath) => setWhyThisFileModalPath(filePath)}
             />
+
+            {/* Why This File Modal (Feature Six) */}
+            {whyThisFileModalPath && (
+              <WhyThisFileModal
+                repositoryId={graph.repository_id}
+                filePath={whyThisFileModalPath}
+                issueText={investigation?.recommendations?.issue_summary}
+                onClose={() => setWhyThisFileModalPath(null)}
+                onSelectNode={(nodeId) => {
+                  handleFocusNode(nodeId);
+                  setWhyThisFileModalPath(null);
+                }}
+              />
+            )}
+
+            {/* Smart Regression Test Map Modal (Feature Three) */}
+            {isTestMapOpen && (
+              <TestMapModal
+                isOpen={isTestMapOpen}
+                repositoryId={graph.repository_id}
+                initialTarget={testMapTarget}
+                onClose={() => setIsTestMapOpen(false)}
+                onSelectTestNode={(nodeId) => {
+                  handleFocusNode(nodeId);
+                  setIsTestMapOpen(false);
+                }}
+              />
+            )}
+
+            {/* First Contribution Mode Modal (Feature Five) */}
+            {isFirstContributionOpen && (
+              <FirstContributionModal
+                isOpen={isFirstContributionOpen}
+                repositoryId={graph.repository_id}
+                onClose={() => setIsFirstContributionOpen(false)}
+                onFocusNode={(nodeId) => handleFocusNode(nodeId)}
+                onExplainFile={(filePath) => setWhyThisFileModalPath(filePath)}
+              />
+            )}
           </div>
         )}
       </main>

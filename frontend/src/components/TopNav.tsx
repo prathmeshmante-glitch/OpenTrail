@@ -1,11 +1,13 @@
 import React from 'react';
-import { Compass, Sparkles, GitBranch, RefreshCw } from 'lucide-react';
+import { Compass, Sparkles, GitBranch, RefreshCw, ShieldCheck } from 'lucide-react';
 import type { HealthResponse } from '../types';
 
 interface TopNavProps {
   currentRepo: string | null;
   onNewAnalysis: () => void;
   onLoadSample: () => void;
+  onOpenFirstContribution?: () => void;
+  onOpenTestMap?: () => void;
   health: HealthResponse | null;
 }
 
@@ -13,6 +15,8 @@ export const TopNav: React.FC<TopNavProps> = ({
   currentRepo,
   onNewAnalysis,
   onLoadSample,
+  onOpenFirstContribution,
+  onOpenTestMap,
   health,
 }) => {
   return (
@@ -73,7 +77,7 @@ export const TopNav: React.FC<TopNavProps> = ({
                 fontWeight: 600,
               }}
             >
-              Navigate code. Trace impact.
+              Navigate code. Trace impact. Contribute with confidence.
             </div>
           </div>
         </div>
@@ -98,7 +102,31 @@ export const TopNav: React.FC<TopNavProps> = ({
         )}
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+        {currentRepo && onOpenFirstContribution && (
+          <button
+            className="btn badge-lime"
+            onClick={onOpenFirstContribution}
+            title="Guided newcomer contribution onboarding"
+            style={{ padding: '0.35rem 0.65rem' }}
+          >
+            <Compass size={14} />
+            First Contribution
+          </button>
+        )}
+
+        {currentRepo && onOpenTestMap && (
+          <button
+            className="btn"
+            onClick={onOpenTestMap}
+            title="Smart regression test discovery"
+            style={{ padding: '0.35rem 0.65rem' }}
+          >
+            <ShieldCheck size={14} />
+            Test Map
+          </button>
+        )}
+
         {health && (
           <div
             className={`badge ${health.ai_available ? 'badge-blue' : 'badge-lime'}`}

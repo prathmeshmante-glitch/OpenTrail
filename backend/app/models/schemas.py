@@ -127,3 +127,111 @@ class HealthResponse(BaseModel):
     graphify_available: bool
     ai_available: bool
     ai_model: str
+
+# --- Evidence Ledger & "Why This File?" Models ---
+class EvidenceItem(BaseModel):
+    id: str
+    file_path: str
+    symbol_name: Optional[str] = None
+    entity_type: str
+    line_start: Optional[int] = None
+    line_end: Optional[int] = None
+    snippet: Optional[str] = None
+    classification: str = Field(
+        ...,
+        description="'Verified in source', 'Graph-supported', 'AI hypothesis', 'Proposed recommendation'",
+    )
+    supporting_relationship: Optional[str] = None
+    is_direct: bool = True
+    provenance: Optional[str] = None
+    uncertainties: Optional[str] = None
+
+class WhyThisFileResponse(BaseModel):
+    file_path: str
+    relevance_reason: str
+    matched_keywords: List[str] = Field(default_factory=list)
+    verified_symbols: List[str] = Field(default_factory=list)
+    connecting_edges: List[str] = Field(default_factory=list)
+    match_type: str = Field(..., description="'direct', 'transitive', or 'inferred'")
+    missing_evidence: Optional[str] = None
+    source_snippet: Optional[str] = None
+
+# --- Change Impact Simulator Models ---
+class ImpactedNode(BaseModel):
+    node_id: str
+    label: str
+    kind: str
+    file_path: str
+    line_start: Optional[int] = None
+    depth: int
+    impact_type: str = Field(..., description="'direct' (1 hop) or 'transitive' (>1 hop)")
+    relationship_path: List[str] = Field(default_factory=list)
+    connecting_edge_ids: List[str] = Field(default_factory=list)
+
+class ImpactSimulationResponse(BaseModel):
+    target_node_id: str
+    target_label: str
+    max_depth: int
+    total_impacted: int
+    direct_impact_count: int
+    transitive_impact_count: int
+    impacted_nodes: List[ImpactedNode]
+    affected_edge_ids: List[str]
+    candidate_test_nodes: List[str]
+    candidate_test_files: List[str]
+    summary_caveats: str
+
+# --- Smart Regression Test Map Models ---
+class TestMapItem(BaseModel):
+    test_node_id: str
+    test_name: str
+    test_file: str
+    line_start: Optional[int] = None
+    state: str = Field(
+        ...,
+        description="'Existing test — verified', 'Proposed new test', 'Suggested manual validation'",
+    )
+    relevance_score: int
+    relevance_reason: str
+    target_symbols: List[str] = Field(default_factory=list)
+    evidence_path: List[str] = Field(default_factory=list)
+
+class TestMapResponse(BaseModel):
+    repository_id: str
+    total_tests_discovered: int
+    existing_tests: List[TestMapItem]
+    proposed_tests: List[TestMapItem]
+
+# --- Interactive Execution Trail Models ---
+class ExecutionTrailStep(BaseModel):
+    step_index: int
+    node_id: str
+    label: str
+    kind: str
+    file_path: str
+    line_start: Optional[int] = None
+    relationship_from_prev: Optional[str] = None
+    edge_id: Optional[str] = None
+    is_inferred: bool = False
+    source_snippet: Optional[str] = None
+    explanation: str
+
+class ExecutionTrailResponse(BaseModel):
+    trail_id: str
+    name: str
+    description: str
+    steps: List[ExecutionTrailStep]
+    total_hops: int
+    node_ids: List[str]
+    edge_ids: List[str]
+
+# --- First Contribution Mode Models ---
+class FirstContributionPlan(BaseModel):
+    issue_title: str
+    overview: str
+    reading_order_files: List[WhyThisFileResponse]
+    key_components: List[InvestigationComponent]
+    recommended_existing_tests: List[TestMapItem]
+    proposed_tests: List[str]
+    step_by_step_guide: List[str]
+
