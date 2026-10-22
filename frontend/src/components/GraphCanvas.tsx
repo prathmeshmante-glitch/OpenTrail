@@ -53,6 +53,29 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
   const [relationFilter, setRelationFilter] = useState<string>('all');
   const [pathSource, setPathSource] = useState<string>('');
   const [pathTarget, setPathTarget] = useState<string>('');
+  const searchInputRef = React.useRef<HTMLInputElement>(null);
+
+  // Global keyboard shortcuts: '/' or Ctrl+K to search, Escape to reset
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't intercept when user is typing in another input/textarea
+      const targetTag = (e.target as HTMLElement)?.tagName?.toLowerCase();
+      const isInput = targetTag === 'input' || targetTag === 'textarea';
+
+      if ((e.key === '/' || ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k')) && !isInput) {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+        searchInputRef.current?.select();
+      } else if (e.key === 'Escape') {
+        searchInputRef.current?.blur();
+        setSearchTerm('');
+        onResetHighlights();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onResetHighlights]);
 
   // Map trail steps for quick node lookup
   const trailStepMap = useMemo(() => {
@@ -221,18 +244,34 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
           <Search size={16} color="var(--color-ink-muted)" />
           <input
+            ref={searchInputRef}
             type="text"
-            placeholder="Search symbol or file..."
+            placeholder="Search (/ to focus)..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && filteredNodes.length > 0) {
+                const targetNode = graph.nodes.find((n) => n.id === filteredNodes[0].id) || null;
+                onSelectNode(targetNode);
+              }
+            }}
             style={{
               border: 'none',
               outline: 'none',
               fontFamily: 'var(--font-mono)',
               fontSize: '0.85rem',
-              width: '170px',
+              width: '160px',
             }}
+            title="Press '/' or Ctrl+K to search, Enter to select first match, Esc to clear"
           />
+          {searchTerm.trim() && (
+            <span
+              className="badge badge-lime"
+              style={{ fontSize: '0.65rem', padding: '0.1rem 0.35rem' }}
+            >
+              {filteredNodes.length} match{filteredNodes.length === 1 ? '' : 'es'}
+            </span>
+          )}
         </div>
 
         <div style={{ width: '1px', backgroundColor: 'var(--color-border)', margin: '0 0.25rem' }} />
