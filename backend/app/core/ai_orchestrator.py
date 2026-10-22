@@ -73,9 +73,10 @@ class AIOrchestrator:
         prompt = "Reply with exactly: OpenTrail AI online"
         
         from google import genai
+        from google.genai import types
         import time
 
-        client = genai.Client(api_key=self.api_key)
+        client = genai.Client(api_key=self.api_key, http_options=types.HttpOptions(timeout=10000))
         
         last_error = ""
         for attempt in range(1, 3):
@@ -135,7 +136,7 @@ class AIOrchestrator:
             from google import genai
             from google.genai import types
 
-            client = genai.Client(api_key=self.api_key)
+            client = genai.Client(api_key=self.api_key, http_options=types.HttpOptions(timeout=10000))
 
             user_prompt = f"""
 <UNTRUSTED_ISSUE_TEXT>
@@ -216,6 +217,14 @@ Provide your investigation response as a JSON object with the following keys:
                     continue
 
             if not response or not response.text:
+                if allow_fallback:
+                    logger.warning("AI model failed or unreachable. allow_fallback is True, generating deterministic recommendation.")
+                    return self._build_deterministic_recommendation(
+                        issue_text=issue_text,
+                        candidate_nodes=candidate_nodes,
+                        query_engine=query_engine,
+                        is_offline=True,
+                    )
                 err_summary = "; ".join(model_errors) if model_errors else "Empty response from AI service."
                 raise AIServiceError(f"AI Service Error: Failed to generate response ({err_summary})")
 

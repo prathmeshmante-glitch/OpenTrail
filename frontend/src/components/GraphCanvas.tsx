@@ -1,6 +1,8 @@
-import React, { useMemo, useState, useEffect, useCallback } from 'react';
+import React, { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import {
   ReactFlow,
+  ReactFlowProvider,
+  useReactFlow,
   Controls,
   Background,
   MiniMap,
@@ -11,7 +13,18 @@ import {
 } from '@xyflow/react';
 import type { Node, Edge } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { Search, Filter, Route, RotateCcw, Share2, Map as MapIcon } from 'lucide-react';
+import {
+  Search,
+  Filter,
+  Route,
+  RotateCcw,
+  Share2,
+  Map as MapIcon,
+  Maximize2,
+  Crosshair,
+  Layers,
+  Sparkles,
+} from 'lucide-react';
 import { CustomNode } from './CustomNode';
 import type { CustomNodeData } from './CustomNode';
 import type { GraphNode, RepositoryGraph, ExecutionTrailResponse } from '../types';
@@ -35,7 +48,9 @@ const nodeTypes = {
   customNode: CustomNode,
 };
 
-export const GraphCanvas: React.FC<GraphCanvasProps> = ({
+type ViewMode = 'all' | 'overview';
+
+const GraphCanvasInner: React.FC<GraphCanvasProps> = ({
   graph,
   selectedNode,
   onSelectNode,
@@ -49,18 +64,19 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
   executionTrail,
   trailCurrentStepIndex: _trailCurrentStepIndex = 0,
 }) => {
+  const { fitView, setCenter } = useReactFlow();
   const [searchTerm, setSearchTerm] = useState('');
   const [kindFilter, setKindFilter] = useState<string>('all');
   const [relationFilter, setRelationFilter] = useState<string>('all');
+  const [viewMode, setViewMode] = useState<ViewMode>('all');
   const [pathSource, setPathSource] = useState<string>('');
   const [pathTarget, setPathTarget] = useState<string>('');
   const [showMiniMap, setShowMiniMap] = useState<boolean>(true);
-  const searchInputRef = React.useRef<HTMLInputElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
-  // Global keyboard shortcuts: '/' or Ctrl+K to search, Escape to reset
+  // Keyboard shortcut listener ('/' to search, 'Escape' to reset)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Don't intercept when user is typing in another input/textarea
       const targetTag = (e.target as HTMLElement)?.tagName?.toLowerCase();
       const isInput = targetTag === 'input' || targetTag === 'textarea';
 
@@ -90,28 +106,63 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
     return map;
   }, [executionTrail]);
 
-  // Compute layout positions deterministically with clean spacing
+  // Compute 2D Masonry Multi-Column Layout (eliminates horizontal card overlap & 1D overcrowding)
   const initialNodes: Node[] = useMemo(() => {
-    // Group nodes by community for structured clustering
+    // 1. Group nodes by community
     const communityGroups: Record<number, GraphNode[]> = {};
     graph.nodes.forEach((n) => {
       const comm = n.community ?? 0;
-      communityGroups[comm] = communityGroups[comm] || [];
+      if (!communityGroups[comm]) communityGroups[comm] = [];
       communityGroups[comm].push(n);
     });
 
-    const calculated: Node[] = [];
-    let colOffset = 0;
+    // 2. Sort communities by member count (largest first)
+    const sortedCommunities = Object.entries(communityGroups).sort(
+      ([, a], [, b]) => b.length - a.length
+    );
 
+    // 3. Multi-column masonry: 3 columns of communities
+    const NUM_COLS = 3;
+    const colHeights = new Array(NUM_COLS).fill(0);
+    const CLUSTER_WIDTH = 620; // 2 cards of 240px + 40px spacing + padding
+    const COL_GAP = 80;
+
+    const calculated: Node[] = [];
     const isTrailActive = Boolean(executionTrail && executionTrail.steps.length > 0);
 
-    Object.values(communityGroups).forEach((members) => {
-      members.sort((a, b) => b.degree - a.degree);
+    sortedCommunities.forEach(([, members]) => {
+      // Pick column with minimum cumulative height
+      let targetCol = 0;
+      let minHeight = colHeights[0];
+      for (let c = 1; c < NUM_COLS; c++) {
+        if (colHeights[c] < minHeight) {
+          minHeight = colHeights[c];
+          targetCol = c;
+        }
+      }
+
+      const clusterBaseX = targetCol * (CLUSTER_WIDTH + COL_GAP) + 60;
+      const clusterBaseY = colHeights[targetCol] + 60;
+
+      // Sort nodes within community: hubs and classes first, then highest degree
+      members.sort((a, b) => {
+        if (a.is_hub && !b.is_hub) return -1;
+        if (!a.is_hub && b.is_hub) return 1;
+        if (a.kind === 'file' && b.kind !== 'file') return -1;
+        if (a.kind !== 'file' && b.kind === 'file') return 1;
+        return b.degree - a.degree;
+      });
+
+      // Place nodes in 2 columns inside the cluster: 240px wide cards with 280px step
+      const CARD_STEP_X = 280;
+      const CARD_STEP_Y = 150;
 
       members.forEach((n, idx) => {
-        // Staggered grid spacing to completely prevent overlapping
-        const x = colOffset * 380 + (idx % 2) * 190;
-        const y = Math.floor(idx / 2) * 180 + (idx % 2 === 1 ? 30 : 0);
+        const subCol = idx % 2;
+        const subRow = Math.floor(idx / 2);
+
+        const x = clusterBaseX + subCol * CARD_STEP_X;
+        const y = clusterBaseY + subRow * CARD_STEP_Y;
 
         const isTrailStep = trailStepMap.has(n.id);
         const trailStepNumber = trailStepMap.get(n.id);
@@ -136,12 +187,14 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
           data: nodeData,
         });
       });
-      colOffset += 1;
+
+      const clusterRows = Math.ceil(members.length / 2);
+      colHeights[targetCol] = clusterBaseY + clusterRows * CARD_STEP_Y + 70;
     });
 
     return calculated;
   }, [
-    graph,
+    graph.nodes,
     highlightedNodeIds,
     impactedNodeIds,
     directImpactNodeIds,
@@ -151,6 +204,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
     trailStepMap,
   ]);
 
+  // Edges mapping with relationship filter
   const initialEdges: Edge[] = useMemo(() => {
     return graph.edges
       .filter((e) => {
@@ -163,6 +217,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
           id: e.id,
           source: e.source,
           target: e.target,
+          type: 'smoothstep',
           animated: isHighlighted || e.confidence === 'INFERRED',
           className: isHighlighted ? 'highlighted' : e.confidence === 'INFERRED' ? 'inferred' : '',
           markerEnd: {
@@ -180,7 +235,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
 
-  // Sync state updates
+  // Synchronize layout calculation
   useEffect(() => {
     setNodes(initialNodes);
   }, [initialNodes, setNodes]);
@@ -189,15 +244,31 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
     setEdges(initialEdges);
   }, [initialEdges, setEdges]);
 
-  // Filter nodes based on search & kind
+  // Progressive exploration / Filter nodes based on viewMode, search, and kind
   const filteredNodes = useMemo(() => {
     return nodes.filter((n) => {
       const data = n.data as CustomNodeData;
+
+      // If viewMode is 'overview', prioritize files, classes, tests, and hubs
+      if (viewMode === 'overview') {
+        const isArchitecturalAnchor =
+          data.kind === 'file' ||
+          data.kind === 'class' ||
+          data.kind === 'test' ||
+          data.is_hub ||
+          data.isSelected ||
+          data.isHighlighted ||
+          data.isImpacted ||
+          data.isTrailStep;
+        if (!isArchitecturalAnchor) return false;
+      }
+
       const matchesKind =
         kindFilter === 'all' ||
+        (kindFilter === 'file' && data.kind === 'file') ||
         (kindFilter === 'class' && data.kind === 'class') ||
         (kindFilter === 'function' && (data.kind === 'function' || data.kind === 'method')) ||
-        (kindFilter === 'file' && data.kind === 'file') ||
+        (kindFilter === 'module' && data.kind === 'module') ||
         (kindFilter === 'test' && data.kind === 'test');
 
       const matchesSearch =
@@ -207,16 +278,17 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
 
       return matchesKind && matchesSearch;
     });
-  }, [nodes, kindFilter, searchTerm]);
+  }, [nodes, viewMode, kindFilter, searchTerm]);
 
-  // Compute breakdown counts for filters
+  // Compute breakdown counts for filters (dynamic from nodes)
   const kindCounts = useMemo(() => {
-    const counts = { all: nodes.length, class: 0, function: 0, file: 0, test: 0 };
+    const counts = { all: nodes.length, file: 0, class: 0, function: 0, module: 0, test: 0 };
     nodes.forEach((n) => {
       const k = (n.data as CustomNodeData)?.kind;
-      if (k === 'class') counts.class++;
+      if (k === 'file') counts.file++;
+      else if (k === 'class') counts.class++;
       else if (k === 'function' || k === 'method') counts.function++;
-      else if (k === 'file') counts.file++;
+      else if (k === 'module') counts.module++;
       else if (k === 'test') counts.test++;
     });
     return counts;
@@ -233,12 +305,25 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
     return counts;
   }, [graph.edges]);
 
+  // Auto-center on selected node smoothly
+  useEffect(() => {
+    if (!selectedNode) return;
+    const foundNode = nodes.find((n) => n.id === selectedNode.id);
+    if (foundNode && foundNode.position) {
+      setCenter(foundNode.position.x + 120, foundNode.position.y + 60, {
+        zoom: 1.15,
+        duration: 500,
+      });
+    }
+  }, [selectedNode, nodes, setCenter]);
+
   const hasActiveFiltersOrHighlights =
     highlightedNodeIds.size > 0 ||
     impactedNodeIds.size > 0 ||
     Boolean(searchTerm) ||
     relationFilter !== 'all' ||
     kindFilter !== 'all' ||
+    viewMode !== 'all' ||
     Boolean(pathSource) ||
     Boolean(pathTarget);
 
@@ -246,10 +331,30 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
     setSearchTerm('');
     setKindFilter('all');
     setRelationFilter('all');
+    setViewMode('all');
     setPathSource('');
     setPathTarget('');
     onResetHighlights();
-  }, [onResetHighlights]);
+    setTimeout(() => fitView({ padding: 0.15, duration: 500 }), 50);
+  }, [onResetHighlights, fitView]);
+
+  const handleFitView = useCallback(() => {
+    fitView({ padding: 0.15, duration: 600 });
+  }, [fitView]);
+
+  const handleCenterSelected = useCallback(() => {
+    if (selectedNode) {
+      const foundNode = nodes.find((n) => n.id === selectedNode.id);
+      if (foundNode && foundNode.position) {
+        setCenter(foundNode.position.x + 120, foundNode.position.y + 60, {
+          zoom: 1.2,
+          duration: 600,
+        });
+      }
+    } else {
+      fitView({ padding: 0.15, duration: 600 });
+    }
+  }, [selectedNode, nodes, setCenter, fitView]);
 
   const onNodeClick = useCallback(
     (_: any, node: Node) => {
@@ -275,18 +380,19 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
           left: '1rem',
           zIndex: 10,
           display: 'flex',
-          gap: '0.5rem',
+          gap: '0.45rem',
           flexWrap: 'wrap',
           backgroundColor: '#FFFFFF',
           border: 'var(--border-thick)',
           boxShadow: 'var(--shadow-offset)',
-          padding: '0.5rem 0.75rem',
+          padding: '0.45rem 0.65rem',
           maxWidth: 'calc(100% - 2rem)',
+          alignItems: 'center',
         }}
       >
         {/* Symbol Search */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-          <Search size={16} color="var(--color-ink-muted)" />
+          <Search size={15} color="var(--color-ink-muted)" />
           <input
             ref={searchInputRef}
             type="text"
@@ -297,16 +403,23 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
               if (e.key === 'Enter' && filteredNodes.length > 0) {
                 const targetNode = graph.nodes.find((n) => n.id === filteredNodes[0].id) || null;
                 onSelectNode(targetNode);
+                const posNode = nodes.find((n) => n.id === filteredNodes[0].id);
+                if (posNode) {
+                  setCenter(posNode.position.x + 120, posNode.position.y + 60, {
+                    zoom: 1.2,
+                    duration: 500,
+                  });
+                }
               }
             }}
             style={{
               border: 'none',
               outline: 'none',
               fontFamily: 'var(--font-mono)',
-              fontSize: '0.85rem',
-              width: '160px',
+              fontSize: '0.82rem',
+              width: '145px',
             }}
-            title="Press '/' or Ctrl+K to search, Enter to select first match, Esc to clear"
+            title="Press '/' or Ctrl+K to search, Enter to focus first match, Esc to clear"
           />
           {searchTerm.trim() && (
             <span
@@ -318,17 +431,39 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
           )}
         </div>
 
-        <div style={{ width: '1px', backgroundColor: 'var(--color-border)', margin: '0 0.25rem' }} />
+        <div style={{ width: '1px', backgroundColor: 'var(--color-border)', height: '20px', margin: '0 0.15rem' }} />
 
-        {/* Kind Filter */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-          <Filter size={14} />
-          {(['all', 'class', 'function', 'file', 'test'] as const).map((k) => (
+        {/* View Mode Toggle: Overview vs All */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+          <button
+            className={`badge ${viewMode === 'all' ? 'badge-lime' : ''}`}
+            onClick={() => setViewMode('all')}
+            style={{ cursor: 'pointer', fontSize: '0.72rem', display: 'flex', alignItems: 'center', gap: '0.2rem' }}
+            title="View all 191 symbols in the repository"
+          >
+            <Layers size={11} /> All ({nodes.length})
+          </button>
+          <button
+            className={`badge ${viewMode === 'overview' ? 'badge-blue' : ''}`}
+            onClick={() => setViewMode('overview')}
+            style={{ cursor: 'pointer', fontSize: '0.72rem', display: 'flex', alignItems: 'center', gap: '0.2rem' }}
+            title="Architecture Overview: Focus on Files, Classes, Tests, and Hubs"
+          >
+            <Sparkles size={11} /> Overview
+          </button>
+        </div>
+
+        <div style={{ width: '1px', backgroundColor: 'var(--color-border)', height: '20px', margin: '0 0.15rem' }} />
+
+        {/* Kind Filter (File, Class, Function, Module, Test) */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+          <Filter size={13} />
+          {(['file', 'class', 'function', 'module', 'test'] as const).map((k) => (
             <button
               key={k}
               className={`badge ${kindFilter === k ? 'badge-lime' : ''}`}
-              onClick={() => setKindFilter(k)}
-              style={{ cursor: 'pointer', textTransform: 'capitalize', fontSize: '0.72rem' }}
+              onClick={() => setKindFilter(kindFilter === k ? 'all' : k)}
+              style={{ cursor: 'pointer', textTransform: 'capitalize', fontSize: '0.7rem' }}
               title={`Filter by ${k} (${kindCounts[k]} nodes)`}
             >
               {k} <span style={{ opacity: 0.65, fontSize: '0.62rem' }}>({kindCounts[k]})</span>
@@ -336,38 +471,38 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
           ))}
         </div>
 
-        <div style={{ width: '1px', backgroundColor: 'var(--color-border)', margin: '0 0.25rem' }} />
+        <div style={{ width: '1px', backgroundColor: 'var(--color-border)', height: '20px', margin: '0 0.15rem' }} />
 
         {/* Relationship Filter */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-          <Share2 size={14} />
-          {(['all', 'calls', 'imports', 'contains'] as const).map((r) => (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+          <Share2 size={13} />
+          {(['calls', 'imports', 'contains'] as const).map((r) => (
             <button
               key={r}
               className={`badge ${relationFilter === r ? 'badge-blue' : ''}`}
-              onClick={() => setRelationFilter(r)}
-              style={{ cursor: 'pointer', textTransform: 'capitalize', fontSize: '0.7rem' }}
+              onClick={() => setRelationFilter(relationFilter === r ? 'all' : r)}
+              style={{ cursor: 'pointer', textTransform: 'capitalize', fontSize: '0.68rem' }}
               title={`Filter by ${r} (${relationCounts[r]} relationships)`}
             >
-              {r} <span style={{ opacity: 0.65, fontSize: '0.62rem' }}>({relationCounts[r]})</span>
+              {r} <span style={{ opacity: 0.65, fontSize: '0.6rem' }}>({relationCounts[r]})</span>
             </button>
           ))}
         </div>
 
-        <div style={{ width: '1px', backgroundColor: 'var(--color-border)', margin: '0 0.25rem' }} />
+        <div style={{ width: '1px', backgroundColor: 'var(--color-border)', height: '20px', margin: '0 0.15rem' }} />
 
         {/* Shortest Path Helper */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-          <Route size={14} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+          <Route size={13} />
           <select
             value={pathSource}
             onChange={(e) => setPathSource(e.target.value)}
             style={{
               border: 'var(--border-thin)',
-              fontSize: '0.75rem',
+              fontSize: '0.72rem',
               fontFamily: 'var(--font-mono)',
-              padding: '0.2rem',
-              maxWidth: '110px',
+              padding: '0.15rem',
+              maxWidth: '95px',
             }}
           >
             <option value="">Source...</option>
@@ -377,16 +512,16 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
               </option>
             ))}
           </select>
-          <span style={{ fontSize: '0.8rem' }}>→</span>
+          <span style={{ fontSize: '0.75rem' }}>→</span>
           <select
             value={pathTarget}
             onChange={(e) => setPathTarget(e.target.value)}
             style={{
               border: 'var(--border-thin)',
-              fontSize: '0.75rem',
+              fontSize: '0.72rem',
               fontFamily: 'var(--font-mono)',
-              padding: '0.2rem',
-              maxWidth: '110px',
+              padding: '0.15rem',
+              maxWidth: '95px',
             }}
           >
             <option value="">Target...</option>
@@ -400,20 +535,43 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
             className="btn btn-primary"
             onClick={handleComputePath}
             disabled={!pathSource || !pathTarget}
-            style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem' }}
+            style={{ padding: '0.15rem 0.45rem', fontSize: '0.72rem' }}
           >
             Trace
           </button>
         </div>
 
+        <div style={{ width: '1px', backgroundColor: 'var(--color-border)', height: '20px', margin: '0 0.15rem' }} />
+
+        {/* Viewport Control Buttons: Fit View & Center */}
+        <button
+          className="btn"
+          onClick={handleFitView}
+          style={{ padding: '0.2rem 0.45rem', fontSize: '0.72rem', display: 'flex', alignItems: 'center', gap: '0.2rem' }}
+          title="Fit entire graph neatly into viewport"
+        >
+          <Maximize2 size={12} /> Fit
+        </button>
+
+        {selectedNode && (
+          <button
+            className="btn badge-lime"
+            onClick={handleCenterSelected}
+            style={{ padding: '0.2rem 0.45rem', fontSize: '0.72rem', display: 'flex', alignItems: 'center', gap: '0.2rem' }}
+            title="Center canvas on currently selected node"
+          >
+            <Crosshair size={12} /> Center
+          </button>
+        )}
+
         <button
           className={`btn ${showMiniMap ? 'btn-secondary' : ''}`}
           onClick={() => setShowMiniMap(!showMiniMap)}
-          style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
+          style={{ padding: '0.2rem 0.45rem', fontSize: '0.72rem', display: 'flex', alignItems: 'center', gap: '0.2rem' }}
           title={showMiniMap ? 'Hide overview minimap' : 'Show overview minimap'}
         >
           <MapIcon size={12} />
-          {showMiniMap ? 'Minimap On' : 'Minimap Off'}
+          {showMiniMap ? 'Minimap' : 'Map Off'}
         </button>
 
         {/* Filter State Status & Reset */}
@@ -423,20 +581,19 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
               fontFamily: 'var(--font-mono)',
               fontSize: '0.72rem',
               color: filteredNodes.length < nodes.length ? 'var(--color-coral)' : 'var(--color-ink-muted)',
-              fontWeight: 600,
+              fontWeight: 700,
             }}
           >
-            {filteredNodes.length}/{nodes.length} nodes
+            {filteredNodes.length}/{nodes.length}
           </span>
           {hasActiveFiltersOrHighlights && (
             <button
               className="btn btn-secondary"
               onClick={handleResetAll}
-              style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
+              style={{ padding: '0.2rem 0.45rem', fontSize: '0.72rem', display: 'flex', alignItems: 'center', gap: '0.2rem' }}
               title="Reset all filters, highlights, and path tracing"
             >
-              <RotateCcw size={12} />
-              Reset All
+              <RotateCcw size={11} /> Reset
             </button>
           )}
         </div>
@@ -451,10 +608,11 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
         nodeTypes={nodeTypes as any}
         onNodeClick={onNodeClick}
         fitView
-        minZoom={0.15}
+        fitViewOptions={{ padding: 0.15, maxZoom: 1.2 }}
+        minZoom={0.1}
         maxZoom={2.5}
       >
-        <Background color="#D3CDBC" gap={24} size={1.5} />
+        <Background color="#D3CDBC" gap={28} size={1.5} />
         <Controls position="bottom-left" showInteractive={false} />
         {showMiniMap ? (
           <MiniMap
@@ -465,6 +623,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
               if (n.data?.isTrailStep) return 'var(--color-cobalt-blue)';
               if (n.data?.isHighlighted) return 'var(--color-electric-lime)';
               if (n.data?.kind === 'class') return 'var(--color-cobalt-blue)';
+              if (n.data?.kind === 'file') return '#FFF8E1';
               return '#FFFFFF';
             }}
             style={{
@@ -472,6 +631,8 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
               boxShadow: 'var(--shadow-offset-sm)',
               borderRadius: 0,
               backgroundColor: '#FFFFFF',
+              width: 200,
+              height: 140,
             }}
           />
         ) : (
@@ -496,5 +657,13 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
         )}
       </ReactFlow>
     </div>
+  );
+};
+
+export const GraphCanvas: React.FC<GraphCanvasProps> = (props) => {
+  return (
+    <ReactFlowProvider>
+      <GraphCanvasInner {...props} />
+    </ReactFlowProvider>
   );
 };

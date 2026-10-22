@@ -165,8 +165,10 @@ export function App() {
 
       const direct = new Set<string>();
       const transitive = new Set<string>();
-      res.impacted_nodes.forEach((n) => {
-        if (n.is_direct) direct.add(n.node_id);
+      const impactedList = res.impacted_nodes || [];
+      impactedList.forEach((n) => {
+        const isDirect = n.is_direct ?? (n.distance === 1);
+        if (isDirect) direct.add(n.node_id);
         else transitive.add(n.node_id);
       });
 
@@ -176,7 +178,9 @@ export function App() {
 
       // Highlight edges involved in affected paths
       const edgeIds = new Set<string>();
-      for (const path of res.affected_paths) {
+      const affectedPaths = res.affected_paths || [];
+      for (const path of affectedPaths) {
+        if (!Array.isArray(path)) continue;
         for (let i = 0; i < path.length - 1; i++) {
           const u = path[i];
           const v = path[i + 1];
@@ -188,7 +192,7 @@ export function App() {
       }
       setHighlightedEdgeIds(edgeIds);
       setNotification(
-        `Impact simulation complete: ${res.direct_impact_count} direct, ${res.transitive_impact_count} transitive dependent(s) up to ${depth} hop(s).`
+        `Impact simulation complete: ${res.direct_impact_count ?? direct.size} direct, ${res.transitive_impact_count ?? transitive.size} transitive dependent(s) up to ${depth} hop(s).`
       );
     } catch (err: any) {
       setNotification(`Impact simulation failed: ${err.message}`);
@@ -217,20 +221,21 @@ export function App() {
       if (firstStepNode) setSelectedNode(firstStepNode);
 
       // Highlight trail nodes
-      setHighlightedNodeIds(new Set(res.trail_path));
+      const trailPath = res.trail_path || (res as any).node_ids || [];
+      setHighlightedNodeIds(new Set(trailPath));
 
       // Highlight trail edges
       const edgeIds = new Set<string>();
-      for (let i = 0; i < res.trail_path.length - 1; i++) {
-        const u = res.trail_path[i];
-        const v = res.trail_path[i + 1];
+      for (let i = 0; i < trailPath.length - 1; i++) {
+        const u = trailPath[i];
+        const v = trailPath[i + 1];
         const edge = graph.edges.find(
           (e) => (e.source === u && e.target === v) || (e.source === v && e.target === u)
         );
         if (edge) edgeIds.add(edge.id);
       }
       setHighlightedEdgeIds(edgeIds);
-      setNotification(`Interactive Execution Trail active: ${res.total_hops} hops loaded.`);
+      setNotification(`Interactive Execution Trail active: ${res.total_hops ?? trailPath.length} hops loaded.`);
     } catch (err: any) {
       setNotification(`Execution trail failed: ${err.message}`);
     }

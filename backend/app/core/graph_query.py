@@ -427,9 +427,15 @@ class GraphQueryEngine:
                             file_path=src_node.file_path,
                             line_start=src_node.line_start,
                             depth=next_depth,
+                            distance=next_depth,
+                            is_direct=(next_depth == 1),
                             impact_type=impact_type,
                             relationship_path=next_path,
+                            path_from_target=next_path,
                             connecting_edge_ids=next_edges,
+                            relationship_type=edge.relationship_type,
+                            evidence=edge.evidence,
+                            source_location=edge.source_location,
                         )
                     )
                     queue.append((src_id, next_depth, next_path, next_edges))
@@ -448,7 +454,7 @@ class GraphQueryEngine:
                 )
                 matches_file = any(
                     self.node_map[aff_id].file_path
-                    and os.path.basename(self.node_map[aff_id].file_path).replace(".py", "")
+                    and os.path.splitext(os.path.basename(self.node_map[aff_id].file_path))[0].lower()
                     in (n.file_path or "").lower()
                     for aff_id in all_affected_ids
                     if aff_id in self.node_map
@@ -463,17 +469,31 @@ class GraphQueryEngine:
             1 for item in impacted_list if item.impact_type == "transitive"
         )
 
+        candidate_test_labels = []
+        for tid in list(candidate_test_nodes)[:10]:
+            if tid in self.node_map:
+                candidate_test_labels.append(f"{self.node_map[tid].label} in {self.node_map[tid].file_path}")
+            else:
+                candidate_test_labels.append(tid)
+
+        affected_paths_list = [item.relationship_path for item in impacted_list]
+
         return ImpactSimulationResponse(
+            repository_id=self.graph.repository_id,
             target_node_id=target.id,
             target_label=target.label,
+            target_file=target.file_path,
             max_depth=max_depth,
+            depth=max_depth,
             total_impacted=len(impacted_list),
             direct_impact_count=direct_count,
             transitive_impact_count=transitive_count,
             impacted_nodes=impacted_list,
             affected_edge_ids=list(affected_edge_ids),
+            affected_paths=affected_paths_list,
             candidate_test_nodes=list(candidate_test_nodes)[:15],
             candidate_test_files=list(candidate_test_files)[:10],
+            candidate_tests=candidate_test_labels,
             summary_caveats="Potential impact analysis based on static AST graph edges. Dynamic dispatch or runtime reflection may introduce additional dependencies.",
         )
 
@@ -541,13 +561,18 @@ class GraphQueryEngine:
             existing_test_items.append(
                 TestMapItem(
                     test_node_id=tn.id,
+                    node_id=tn.id,
                     test_name=tn.label,
+                    name=tn.label,
                     test_file=tn.file_path,
+                    file_path=tn.file_path,
                     line_start=tn.line_start,
+                    source_location=f"L{tn.line_start}" if tn.line_start else None,
                     state="Existing test — verified",
                     relevance_score=relevance_score,
                     relevance_reason=relevance_reason,
                     target_symbols=referenced_targets[:4],
+                    connected_symbol=direct_matches[0] if direct_matches else (referenced_targets[0] if referenced_targets else None),
                     evidence_path=evidence_path,
                 )
             )
@@ -562,13 +587,17 @@ class GraphQueryEngine:
                 nodes = self.find_nodes_by_identifier(s)
                 sym_label = nodes[0].label if nodes else s
                 sym_file = nodes[0].file_path if nodes else "target module"
-                clean_name = os.path.basename(sym_file).replace(".py", "")
+                clean_name = os.path.splitext(os.path.basename(sym_file))[0]
                 proposed_test_items.append(
                     TestMapItem(
                         test_node_id=f"proposed_{s}",
+                        node_id=f"proposed_{s}",
                         test_name=f"Unit test verifying edge cases for {sym_label}",
+                        name=f"Unit test verifying edge cases for {sym_label}",
                         test_file=f"tests/test_{clean_name}_edge.py",
+                        file_path=f"tests/test_{clean_name}_edge.py",
                         line_start=None,
+                        source_location=None,
                         state="Proposed new test",
                         relevance_score=85,
                         relevance_reason=f"Validates behavior changes and edge inputs for {sym_label}",
@@ -580,8 +609,13 @@ class GraphQueryEngine:
         return TestMapResponse(
             repository_id=self.graph.repository_id,
             total_tests_discovered=len(existing_test_items),
+            total_discovered=len(existing_test_items),
+            verified_existing_count=len(existing_test_items),
+            target_symbols=target_symbols or [],
             existing_tests=existing_test_items[:30],
             proposed_tests=proposed_test_items,
+            tests=existing_test_items[:30],
+            summary=f"Found {len(existing_test_items)} verified tests in repository.",
         )
 
     def build_execution_trail(
@@ -670,27 +704,38 @@ class GraphQueryEngine:
             steps.append(
                 ExecutionTrailStep(
                     step_index=idx + 1,
+                    step_number=idx + 1,
                     node_id=n.id,
                     label=n.label,
                     kind=n.kind,
                     file_path=n.file_path,
                     line_start=n.line_start,
+                    source_location=f"L{n.line_start}" if n.line_start else None,
                     relationship_from_prev=rel_from_prev,
+                    incoming_relation=rel_from_prev,
                     edge_id=e_id,
                     is_inferred=is_inf,
+                    is_structurally_extracted=not is_inf,
+                    provenance="Model Inferred Relationship" if is_inf else "AST Extracted",
                     source_snippet=snippet,
+                    source_excerpt=snippet,
+                    evidence=f"Static code relationship from AST: {rel_from_prev}" if rel_from_prev else "Entry point",
                     explanation=expl,
                 )
             )
 
         return ExecutionTrailResponse(
             trail_id=f"trail_{start.id}",
+            repository_id=self.graph.repository_id,
             name=f"Trail: {start.label} to {self.node_map[path_nodes[-1]].label}",
             description=f"Static code relationship trail tracing {len(steps)} verified components.",
+            trail_type="Static Dependency Trail",
             steps=steps,
             total_hops=max(0, len(steps) - 1),
             node_ids=path_nodes,
+            trail_path=path_nodes,
             edge_ids=edge_ids,
+            caveats=["Static provenance based on AST relationships; not runtime trace."],
         )
 
     def explain_why_this_file(
@@ -757,14 +802,21 @@ class GraphQueryEngine:
         if not connecting_edges and not matched_kws:
             missing_evidence = "No direct call edges linking this file to target issue symbols were extracted in static AST."
 
+        source_locs = [f"L{n.line_start}" for n in nodes_in_file if n.line_start]
+        missing_ev_list = [missing_evidence] if missing_evidence else []
+
         return WhyThisFileResponse(
             file_path=file_path,
             relevance_reason=relevance_reason,
+            match_type=match_type,
+            summary=relevance_reason,
+            relevance=match_type,
+            matched_terms=matched_kws[:6],
             matched_keywords=matched_kws[:6],
             verified_symbols=verified_symbols[:8],
             connecting_edges=connecting_edges[:6],
-            match_type=match_type,
-            missing_evidence=missing_evidence,
+            source_locations=source_locs[:6],
+            missing_evidence=missing_ev_list,
             source_snippet=snippet,
         )
 

@@ -244,6 +244,11 @@ export const TestMapModal: React.FC<TestMapModalProps> = ({
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
               {displayedTests.map((test, idx) => {
                 const isVerified = test.state === 'Existing test — verified';
+                const testName = test.name || (test as any).test_name || 'Unnamed Test';
+                const testFile = test.file_path || (test as any).test_file || '';
+                const testNodeId = test.node_id || (test as any).test_node_id || null;
+                const testLoc = test.source_location || ((test as any).line_start ? `L${(test as any).line_start}` : null);
+
                 return (
                   <div
                     key={idx}
@@ -257,7 +262,7 @@ export const TestMapModal: React.FC<TestMapModalProps> = ({
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.35rem', flexWrap: 'wrap', gap: '0.5rem' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                         <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 800, fontSize: '0.95rem' }}>
-                          {test.name}
+                          {testName}
                         </span>
                         {isVerified ? (
                           <span className="badge badge-lime" style={{ fontSize: '0.7rem' }}>
@@ -278,11 +283,11 @@ export const TestMapModal: React.FC<TestMapModalProps> = ({
                         >
                           Relevance: {test.relevance_score}%
                         </span>
-                        {test.node_id && onSelectTestNode && (
+                        {testNodeId && onSelectTestNode && (
                           <button
                             className="btn btn-primary"
                             onClick={() => {
-                              onSelectTestNode(test.node_id!);
+                              onSelectTestNode(testNodeId);
                               onClose();
                             }}
                             style={{ padding: '0.2rem 0.5rem', fontSize: '0.7rem' }}
@@ -295,8 +300,8 @@ export const TestMapModal: React.FC<TestMapModalProps> = ({
 
                     {/* Location & Reason */}
                     <div style={{ fontSize: '0.8rem', color: 'var(--color-ink-muted)', marginBottom: '0.4rem', fontFamily: 'var(--font-mono)' }}>
-                      <span>{test.file_path}</span>
-                      {test.source_location && <span> : {test.source_location}</span>}
+                      <span>{testFile}</span>
+                      {testLoc && <span> : {testLoc}</span>}
                     </div>
 
                     <p style={{ fontSize: '0.85rem', lineHeight: 1.4, margin: '0 0 0.4rem 0' }}>

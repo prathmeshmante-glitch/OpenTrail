@@ -197,7 +197,14 @@ export const FirstContributionModal: React.FC<FirstContributionModalProps> = ({
             </div>
           )}
 
-          {plan && (
+          {plan && (() => {
+            const readingOrderFiles = Array.isArray(plan.reading_order_files) ? plan.reading_order_files : [];
+            const keyComponents = (plan.key_components && typeof plan.key_components === 'object') ? plan.key_components : {};
+            const stepByStepGuide = Array.isArray(plan.step_by_step_guide) ? plan.step_by_step_guide : [];
+            const suggestedTests = Array.isArray(plan.suggested_tests) ? plan.suggested_tests : [];
+            const cautionaryNotes = Array.isArray(plan.cautionary_notes) ? plan.cautionary_notes : [];
+
+            return (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
               {/* Beginner Summary Card */}
               <div
@@ -219,64 +226,66 @@ export const FirstContributionModal: React.FC<FirstContributionModalProps> = ({
               </div>
 
               {/* Recommended Reading Order */}
-              <div>
-                <div style={{ fontWeight: 800, fontSize: '0.85rem', marginBottom: '0.6rem' }}>
-                  1. RECOMMENDED FILE READING ORDER ({plan.reading_order_files.length} files)
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                  {plan.reading_order_files.map((file, idx) => (
-                    <div
-                      key={idx}
-                      style={{
-                        padding: '0.6rem 0.85rem',
-                        border: 'var(--border-thin)',
-                        backgroundColor: '#FFFFFF',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        <span
-                          style={{
-                            width: '20px',
-                            height: '20px',
-                            borderRadius: '50%',
-                            backgroundColor: 'var(--color-electric-lime)',
-                            border: '1px solid var(--color-ink)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            fontWeight: 800,
-                            fontSize: '0.75rem',
-                          }}
-                        >
-                          {idx + 1}
-                        </span>
-                        <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: '0.85rem' }}>
-                          {file}
-                        </span>
-                      </div>
-                      <button
-                        className="btn"
-                        onClick={() => onExplainFile(file)}
-                        style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem' }}
+              {readingOrderFiles.length > 0 && (
+                <div>
+                  <div style={{ fontWeight: 800, fontSize: '0.85rem', marginBottom: '0.6rem' }}>
+                    1. RECOMMENDED FILE READING ORDER ({readingOrderFiles.length} files)
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                    {readingOrderFiles.map((file, idx) => (
+                      <div
+                        key={idx}
+                        style={{
+                          padding: '0.6rem 0.85rem',
+                          border: 'var(--border-thin)',
+                          backgroundColor: '#FFFFFF',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                        }}
                       >
-                        Why this file?
-                      </button>
-                    </div>
-                  ))}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <span
+                            style={{
+                              width: '20px',
+                              height: '20px',
+                              borderRadius: '50%',
+                              backgroundColor: 'var(--color-electric-lime)',
+                              border: '1px solid var(--color-ink)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontWeight: 800,
+                              fontSize: '0.75rem',
+                            }}
+                          >
+                            {idx + 1}
+                          </span>
+                          <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: '0.85rem' }}>
+                            {file}
+                          </span>
+                        </div>
+                        <button
+                          className="btn"
+                          onClick={() => onExplainFile(file)}
+                          style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem' }}
+                        >
+                          Why this file?
+                        </button>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Key Components Plain English */}
-              {Object.keys(plan.key_components).length > 0 && (
+              {Object.keys(keyComponents).length > 0 && (
                 <div>
                   <div style={{ fontWeight: 800, fontSize: '0.85rem', marginBottom: '0.6rem' }}>
                     2. KEY ARCHITECTURAL ROLES
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '0.6rem' }}>
-                    {Object.entries(plan.key_components).map(([sym, role], idx) => (
+                    {Object.entries(keyComponents).map(([sym, role], idx) => (
                       <div
                         key={idx}
                         style={{
@@ -289,7 +298,7 @@ export const FirstContributionModal: React.FC<FirstContributionModalProps> = ({
                           {sym}
                         </div>
                         <div style={{ fontSize: '0.8rem', color: 'var(--color-ink-muted)' }}>
-                          {role}
+                          {String(role)}
                         </div>
                       </div>
                     ))}
@@ -298,91 +307,93 @@ export const FirstContributionModal: React.FC<FirstContributionModalProps> = ({
               )}
 
               {/* Step by Step Action Checklist */}
-              <div>
-                <div style={{ fontWeight: 800, fontSize: '0.85rem', marginBottom: '0.6rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <span>3. STEP-BY-STEP CONTRIBUTION WORKFLOW</span>
-                  <span style={{ fontSize: '0.75rem', color: 'var(--color-ink-muted)' }}>
-                    {completedSteps.size} of {plan.step_by_step_guide.length} completed
-                  </span>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-                  {plan.step_by_step_guide.map((step) => {
-                    const isDone = completedSteps.has(step.step_number);
-                    return (
-                      <div
-                        key={step.step_number}
-                        style={{
-                          padding: '0.85rem',
-                          border: 'var(--border-thick)',
-                          backgroundColor: isDone ? 'var(--color-paper)' : '#FFFFFF',
-                          boxShadow: 'var(--shadow-offset-sm)',
-                          display: 'flex',
-                          alignItems: 'flex-start',
-                          gap: '0.75rem',
-                        }}
-                      >
-                        <button
-                          onClick={() => toggleStep(step.step_number)}
+              {stepByStepGuide.length > 0 && (
+                <div>
+                  <div style={{ fontWeight: 800, fontSize: '0.85rem', marginBottom: '0.6rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span>3. STEP-BY-STEP CONTRIBUTION WORKFLOW</span>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--color-ink-muted)' }}>
+                      {completedSteps.size} of {stepByStepGuide.length} completed
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                    {stepByStepGuide.map((step) => {
+                      const isDone = completedSteps.has(step.step_number);
+                      return (
+                        <div
+                          key={step.step_number}
                           style={{
-                            border: 'none',
-                            background: 'none',
-                            cursor: 'pointer',
-                            padding: 0,
-                            marginTop: '0.15rem',
+                            padding: '0.85rem',
+                            border: 'var(--border-thick)',
+                            backgroundColor: isDone ? 'var(--color-paper)' : '#FFFFFF',
+                            boxShadow: 'var(--shadow-offset-sm)',
+                            display: 'flex',
+                            alignItems: 'flex-start',
+                            gap: '0.75rem',
                           }}
                         >
-                          <CheckSquare
-                            size={18}
-                            color={isDone ? '#2E7D32' : 'var(--color-ink-muted)'}
-                          />
-                        </button>
+                          <button
+                            onClick={() => toggleStep(step.step_number)}
+                            style={{
+                              border: 'none',
+                              background: 'none',
+                              cursor: 'pointer',
+                              padding: 0,
+                              marginTop: '0.15rem',
+                            }}
+                          >
+                            <CheckSquare
+                              size={18}
+                              color={isDone ? '#2E7D32' : 'var(--color-ink-muted)'}
+                            />
+                          </button>
 
-                        <div style={{ flex: 1 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
-                            <span
-                              style={{
-                                fontWeight: 800,
-                                fontSize: '0.9rem',
-                                textDecoration: isDone ? 'line-through' : 'none',
-                              }}
-                            >
-                              Step {step.step_number}: {step.title}
-                            </span>
-                            <span className="badge badge-lime" style={{ fontSize: '0.65rem' }}>
-                              {step.evidence_badge}
-                            </span>
-                          </div>
-
-                          <p style={{ fontSize: '0.85rem', margin: '0 0 0.4rem 0', lineHeight: 1.4 }}>
-                            {step.description}
-                          </p>
-
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap', fontSize: '0.75rem' }}>
-                            <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--color-ink-muted)' }}>
-                              Target: {step.recommended_file}
-                            </span>
-                            {step.target_node_id && (
-                              <button
-                                className="btn btn-primary"
-                                onClick={() => {
-                                  onFocusNode(step.target_node_id!);
-                                  onClose();
+                          <div style={{ flex: 1 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
+                              <span
+                                style={{
+                                  fontWeight: 800,
+                                  fontSize: '0.9rem',
+                                  textDecoration: isDone ? 'line-through' : 'none',
                                 }}
-                                style={{ padding: '0.15rem 0.4rem', fontSize: '0.7rem' }}
                               >
-                                Focus in Graph
-                              </button>
-                            )}
+                                Step {step.step_number}: {step.title}
+                              </span>
+                              <span className="badge badge-lime" style={{ fontSize: '0.65rem' }}>
+                                {step.evidence_badge}
+                              </span>
+                            </div>
+
+                            <p style={{ fontSize: '0.85rem', margin: '0 0 0.4rem 0', lineHeight: 1.4 }}>
+                              {step.description}
+                            </p>
+
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap', fontSize: '0.75rem' }}>
+                              <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--color-ink-muted)' }}>
+                                Target: {step.recommended_file}
+                              </span>
+                              {step.target_node_id && (
+                                <button
+                                  className="btn btn-primary"
+                                  onClick={() => {
+                                    onFocusNode(step.target_node_id!);
+                                    onClose();
+                                  }}
+                                  style={{ padding: '0.15rem 0.4rem', fontSize: '0.7rem' }}
+                                >
+                                  Focus in Graph
+                                </button>
+                              )}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Regression Tests */}
-              {plan.suggested_tests.length > 0 && (
+              {suggestedTests.length > 0 && (
                 <div
                   style={{
                     padding: '1rem',
@@ -395,7 +406,7 @@ export const FirstContributionModal: React.FC<FirstContributionModalProps> = ({
                     <span>SUGGESTED REGRESSION VERIFICATION</span>
                   </div>
                   <ul style={{ paddingLeft: '1.2rem', margin: 0, fontSize: '0.85rem', lineHeight: 1.6 }}>
-                    {plan.suggested_tests.map((t, idx) => (
+                    {suggestedTests.map((t, idx) => (
                       <li key={idx} style={{ fontFamily: 'var(--font-mono)' }}>{t}</li>
                     ))}
                   </ul>
@@ -403,7 +414,7 @@ export const FirstContributionModal: React.FC<FirstContributionModalProps> = ({
               )}
 
               {/* Cautionary Notes */}
-              {plan.cautionary_notes.length > 0 && (
+              {cautionaryNotes.length > 0 && (
                 <div
                   style={{
                     padding: '0.75rem 1rem',
@@ -416,7 +427,7 @@ export const FirstContributionModal: React.FC<FirstContributionModalProps> = ({
                     <AlertCircle size={14} color="#F57C00" />
                     <span>CONTRIBUTOR NOTES & CONVENTIONS</span>
                   </div>
-                  {plan.cautionary_notes.map((note, idx) => (
+                  {cautionaryNotes.map((note, idx) => (
                     <div key={idx} style={{ color: 'var(--color-ink-muted)', marginBottom: '0.2rem' }}>
                       • {note}
                     </div>
@@ -424,7 +435,8 @@ export const FirstContributionModal: React.FC<FirstContributionModalProps> = ({
                 </div>
               )}
             </div>
-          )}
+            );
+          })()}
         </div>
       </div>
     </div>

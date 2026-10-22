@@ -81,8 +81,9 @@ export const DetailPanel: React.FC<DetailPanelProps> = ({
     }
   };
 
-  const directImpacts = impactResult?.impacted_nodes.filter((n) => n.is_direct) || [];
-  const transitiveImpacts = impactResult?.impacted_nodes.filter((n) => !n.is_direct) || [];
+  const allImpacted = Array.isArray(impactResult?.impacted_nodes) ? impactResult!.impacted_nodes : [];
+  const directImpacts = allImpacted.filter((n) => n.is_direct ?? (n.distance === 1));
+  const transitiveImpacts = allImpacted.filter((n) => !(n.is_direct ?? (n.distance === 1)));
 
   return (
     <div

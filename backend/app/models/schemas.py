@@ -149,11 +149,15 @@ class EvidenceItem(BaseModel):
 class WhyThisFileResponse(BaseModel):
     file_path: str
     relevance_reason: str
+    match_type: str = Field(..., description="'direct', 'transitive', or 'inferred'")
+    summary: Optional[str] = None
+    relevance: Optional[str] = None
+    matched_terms: List[str] = Field(default_factory=list)
     matched_keywords: List[str] = Field(default_factory=list)
     verified_symbols: List[str] = Field(default_factory=list)
     connecting_edges: List[str] = Field(default_factory=list)
-    match_type: str = Field(..., description="'direct', 'transitive', or 'inferred'")
-    missing_evidence: Optional[str] = None
+    source_locations: List[str] = Field(default_factory=list)
+    missing_evidence: List[str] = Field(default_factory=list)
     source_snippet: Optional[str] = None
 
 # --- Change Impact Simulator Models ---
@@ -163,30 +167,45 @@ class ImpactedNode(BaseModel):
     kind: str
     file_path: str
     line_start: Optional[int] = None
-    depth: int
-    impact_type: str = Field(..., description="'direct' (1 hop) or 'transitive' (>1 hop)")
+    depth: int = 1
+    distance: int = 1
+    is_direct: bool = True
+    impact_type: str = Field(..., description="'direct' or 'transitive'")
     relationship_path: List[str] = Field(default_factory=list)
+    path_from_target: List[str] = Field(default_factory=list)
     connecting_edge_ids: List[str] = Field(default_factory=list)
+    relationship_type: str = "calls"
+    evidence: Optional[str] = None
+    source_location: Optional[str] = None
 
 class ImpactSimulationResponse(BaseModel):
+    repository_id: str = ""
     target_node_id: str
     target_label: str
+    target_file: str = ""
     max_depth: int
+    depth: int = 2
     total_impacted: int
     direct_impact_count: int
     transitive_impact_count: int
     impacted_nodes: List[ImpactedNode]
-    affected_edge_ids: List[str]
-    candidate_test_nodes: List[str]
-    candidate_test_files: List[str]
-    summary_caveats: str
+    affected_edge_ids: List[str] = Field(default_factory=list)
+    affected_paths: List[List[str]] = Field(default_factory=list)
+    candidate_test_nodes: List[str] = Field(default_factory=list)
+    candidate_test_files: List[str] = Field(default_factory=list)
+    candidate_tests: List[str] = Field(default_factory=list)
+    summary_caveats: Any = Field(default_factory=list)
 
 # --- Smart Regression Test Map Models ---
 class TestMapItem(BaseModel):
-    test_node_id: str
-    test_name: str
-    test_file: str
+    test_node_id: str = ""
+    node_id: Optional[str] = None
+    test_name: str = ""
+    name: str = ""
+    test_file: str = ""
+    file_path: str = ""
     line_start: Optional[int] = None
+    source_location: Optional[str] = None
     state: str = Field(
         ...,
         description="'Existing test — verified', 'Proposed new test', 'Suggested manual validation'",
@@ -194,44 +213,74 @@ class TestMapItem(BaseModel):
     relevance_score: int
     relevance_reason: str
     target_symbols: List[str] = Field(default_factory=list)
+    connected_symbol: Optional[str] = None
     evidence_path: List[str] = Field(default_factory=list)
 
 class TestMapResponse(BaseModel):
     repository_id: str
-    total_tests_discovered: int
+    total_tests_discovered: int = 0
+    total_discovered: int = 0
+    verified_existing_count: int = 0
+    target_symbols: List[str] = Field(default_factory=list)
     existing_tests: List[TestMapItem]
     proposed_tests: List[TestMapItem]
+    tests: List[TestMapItem] = Field(default_factory=list)
+    summary: str = ""
 
 # --- Interactive Execution Trail Models ---
 class ExecutionTrailStep(BaseModel):
-    step_index: int
+    step_index: int = 0
+    step_number: int = 1
     node_id: str
     label: str
     kind: str
     file_path: str
     line_start: Optional[int] = None
+    source_location: Optional[str] = None
     relationship_from_prev: Optional[str] = None
+    incoming_relation: Optional[str] = None
     edge_id: Optional[str] = None
     is_inferred: bool = False
+    is_structurally_extracted: bool = True
+    provenance: str = "AST Extracted"
     source_snippet: Optional[str] = None
-    explanation: str
+    source_excerpt: Optional[str] = None
+    evidence: Optional[str] = None
+    explanation: str = ""
 
 class ExecutionTrailResponse(BaseModel):
-    trail_id: str
-    name: str
-    description: str
+    trail_id: str = ""
+    repository_id: str = ""
+    name: str = ""
+    description: str = ""
+    trail_type: str = "Static Dependency Trail"
     steps: List[ExecutionTrailStep]
     total_hops: int
-    node_ids: List[str]
-    edge_ids: List[str]
+    node_ids: List[str] = Field(default_factory=list)
+    trail_path: List[str] = Field(default_factory=list)
+    edge_ids: List[str] = Field(default_factory=list)
+    caveats: List[str] = Field(default_factory=list)
 
 # --- First Contribution Mode Models ---
+class FirstContributionStep(BaseModel):
+    step_number: int
+    title: str = ""
+    description: str = ""
+    recommended_file: str = ""
+    target_node_id: Optional[str] = None
+    verified_symbol: Optional[str] = None
+    evidence_badge: str = "AST Extracted"
+
 class FirstContributionPlan(BaseModel):
+    repository_id: str = ""
     issue_title: str
-    overview: str
-    reading_order_files: List[WhyThisFileResponse]
-    key_components: List[InvestigationComponent]
-    recommended_existing_tests: List[TestMapItem]
-    proposed_tests: List[str]
-    step_by_step_guide: List[str]
+    beginner_summary: str = ""
+    overview: str = ""
+    reading_order_files: List[Any] = Field(default_factory=list)
+    key_components: Any = Field(default_factory=dict)
+    step_by_step_guide: Any = Field(default_factory=list)
+    suggested_tests: List[str] = Field(default_factory=list)
+    proposed_tests: List[str] = Field(default_factory=list)
+    recommended_existing_tests: List[TestMapItem] = Field(default_factory=list)
+    cautionary_notes: List[str] = Field(default_factory=list)
 

@@ -30,20 +30,48 @@ def _parse_line_number(source_location: Optional[str]) -> Tuple[Optional[int], O
         return start, end
     return None, None
 
+RECOGNIZED_EXTENSIONS = {
+    ".py", ".ts", ".tsx", ".js", ".jsx", ".kt", ".kts", ".java", ".go", ".rs",
+    ".c", ".cpp", ".cc", ".cxx", ".h", ".hpp", ".cs", ".rb", ".swift", ".m", ".mm",
+    ".dart", ".scala", ".gradle", ".xml", ".json", ".yaml", ".yml", ".toml", ".md",
+    ".sh", ".bash", ".bat", ".ps1", ".html", ".css", ".scss"
+}
+
 def _infer_kind(node_dict: Dict[str, Any]) -> str:
     """Infers the kind (file, class, function, method, module, test) from AST node attributes."""
     label = node_dict.get("label", "")
-    source_file = (node_dict.get("source_file") or "").lower()
-    
-    if "test" in source_file or "test_" in label.lower() or label.lower().endswith("_test"):
+    source_file = node_dict.get("source_file") or ""
+    is_callable = bool(node_dict.get("_callable"))
+    is_class = bool(node_dict.get("_callable_class"))
+
+    # 1. First, check if this node represents a file container
+    _, ext = os.path.splitext(label)
+    is_file_node = False
+    if source_file and not is_callable and not is_class:
+        basename = os.path.basename(source_file)
+        if (
+            ext.lower() in RECOGNIZED_EXTENSIONS
+            or basename == label
+            or source_file.endswith(label)
+            or label == "gradlew"
+            or any(label.endswith(e) for e in RECOGNIZED_EXTENSIONS)
+        ):
+            is_file_node = True
+
+    if is_file_node:
+        return "file"
+
+    source_file_lower = source_file.lower()
+    label_lower = label.lower()
+    if "test" in source_file_lower or "test_" in label_lower or label_lower.endswith("_test"):
         return "test"
-    if node_dict.get("_callable_class"):
+    if is_class:
         return "class"
-    if node_dict.get("_callable"):
-        if label.startswith(".") or "(" in label and "." in label:
+    if is_callable:
+        if label.startswith(".") or ("(" in label and "." in label):
             return "method"
         return "function"
-    if any(label.endswith(ext) for ext in [".py", ".ts", ".js", ".go", ".rs", ".java", ".c", ".cpp"]):
+    if any(label.endswith(e) for e in RECOGNIZED_EXTENSIONS):
         return "file"
     return "module"
 

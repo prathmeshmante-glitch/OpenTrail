@@ -1,7 +1,7 @@
 import React, { memo } from 'react';
 import { Handle, Position } from '@xyflow/react';
 import type { NodeProps } from '@xyflow/react';
-import { Code, Box, FileText, CheckCircle, Route } from 'lucide-react';
+import { Code, Box, FileText, CheckCircle, Route, Layers } from 'lucide-react';
 import type { GraphNode } from '../types';
 
 export interface CustomNodeData extends GraphNode {
@@ -29,7 +29,9 @@ const CustomNodeComponent: React.FC<NodeProps<any>> = ({ data, selected }) => {
       case 'test':
         return 'var(--color-coral)';
       case 'file':
-        return 'var(--color-paper)';
+        return '#FFF8E1';
+      case 'module':
+        return '#E0E7FF';
       default:
         return '#FFFFFF';
     }
@@ -46,6 +48,8 @@ const CustomNodeComponent: React.FC<NodeProps<any>> = ({ data, selected }) => {
         return <CheckCircle size={12} />;
       case 'file':
         return <FileText size={12} />;
+      case 'module':
+        return <Layers size={12} />;
       default:
         return <Code size={12} />;
     }
@@ -78,16 +82,15 @@ const CustomNodeComponent: React.FC<NodeProps<any>> = ({ data, selected }) => {
   return (
     <div
       style={{
-        minWidth: '200px',
-        maxWidth: '260px',
+        width: '240px',
         backgroundColor: bgColor,
         border: `2.5px ${borderStyle} ${borderColor}`,
         boxShadow: isHighlighted || isTrailStep ? '4px 4px 0px var(--color-ink)' : 'var(--shadow-offset-sm)',
         padding: '0.65rem 0.85rem',
         cursor: 'pointer',
         transition: 'all 0.15s ease',
-        transform: isHighlighted || isTrailStep ? 'scale(1.04)' : 'none',
-        opacity: isDimmed ? 0.3 : 1.0,
+        transform: isHighlighted || isTrailStep ? 'scale(1.03)' : 'none',
+        opacity: isDimmed ? 0.25 : 1.0,
       }}
     >
       <Handle type="target" position={Position.Top} style={{ background: 'var(--color-ink)', width: 8, height: 8 }} />

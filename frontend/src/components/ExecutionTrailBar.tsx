@@ -58,7 +58,7 @@ export const ExecutionTrailBar: React.FC<ExecutionTrailBarProps> = ({
             }}
           >
             <Route size={14} />
-            TRAIL HOP {currentStep.step_number}/{total}
+            TRAIL HOP {currentStep.step_number || (currentStepIndex + 1)}/{total}
           </div>
           <span className="badge badge-lime" style={{ fontSize: '0.7rem' }}>
             {trail.trail_type}

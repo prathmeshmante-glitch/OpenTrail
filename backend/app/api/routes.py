@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException, Query
 
@@ -12,6 +12,7 @@ from backend.app.core.security import SecurityValidationError
 from backend.app.models.schemas import (
     ExecutionTrailResponse,
     FirstContributionPlan,
+    FirstContributionStep,
     HealthResponse,
     HubNode,
     ImpactSimulationResponse,
@@ -189,6 +190,7 @@ def simulate_change_impact(
         raise HTTPException(status_code=500, detail=f"Impact simulation error: {e}")
 
 @router.get("/repositories/{repository_id}/tests", response_model=TestMapResponse)
+@router.get("/repositories/{repository_id}/test-map", response_model=TestMapResponse)
 def get_smart_test_map(
     repository_id: str,
     target: Optional[str] = Query(None, description="Optional target symbol or node ID to filter tests for"),
@@ -206,25 +208,35 @@ def get_smart_test_map(
 @router.get("/repositories/{repository_id}/trail", response_model=ExecutionTrailResponse)
 def get_execution_trail(
     repository_id: str,
-    start: str = Query(..., description="Start node ID for the execution trail"),
+    start: Optional[str] = Query(None, description="Start node ID for the execution trail"),
+    start_node_id: Optional[str] = Query(None, description="Alternative start node ID parameter"),
     end: Optional[str] = Query(None, description="Optional destination node ID"),
-    steps: int = Query(6, ge=2, le=10, description="Maximum number of steps"),
+    steps: Optional[int] = Query(None, ge=1, le=10, description="Maximum number of steps"),
+    max_hops: Optional[int] = Query(None, ge=1, le=10, description="Alternative max hops parameter"),
 ):
     """
     Constructs an interactive step-by-step static dependency trail across verified graph edges.
     """
+    target_start = start or start_node_id
+    if not target_start:
+        raise HTTPException(status_code=422, detail="Missing required start node identifier ('start' or 'start_node_id').")
+
+    hop_limit = steps or max_hops or 6
+    hop_limit = max(1, min(hop_limit, 10))
+
     query_engine = job_manager.get_query_engine(repository_id.lower())
     if not query_engine:
         raise HTTPException(status_code=404, detail=f"Repository '{repository_id}' not found.")
     
     try:
-        return query_engine.build_execution_trail(start, end_node_id=end, max_steps=steps)
+        return query_engine.build_execution_trail(target_start, end_node_id=end, max_steps=hop_limit)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Execution trail error: {e}")
 
 @router.get("/repositories/{repository_id}/why-file", response_model=WhyThisFileResponse)
+@router.get("/repositories/{repository_id}/why-this-file", response_model=WhyThisFileResponse)
 def explain_why_this_file(
     repository_id: str,
     file_path: str = Query(..., description="Repository-relative file path to explain"),
@@ -273,33 +285,88 @@ def generate_first_contribution_plan(
             seen_files.add(comp.file_path)
             unique_files.append(comp.file_path)
 
-    relevant_node_ids = [c.node_id for c in rec.relevant_components]
-    file_explanations: List[WhyThisFileResponse] = [
-        query_engine.explain_why_this_file(fp, issue_text=req.issue_text, relevant_node_ids=relevant_node_ids)
-        for fp in unique_files[:5]
-    ]
-
     # 3. Discovered test suites
     target_labels = [c.label for c in rec.relevant_components[:3]]
     test_map = query_engine.get_smart_test_map(target_symbols=target_labels)
 
-    # 4. Generate structured contribution guide
-    guide_steps = [
-        f"1. Start by inspecting {unique_files[0] if unique_files else 'the target file'} where the core entry point is defined.",
-        "2. Review the verified AST symbols and their caller/callee relationships highlighted on the interactive canvas.",
-        f"3. Run the targeted existing regression tests: {', '.join(t.test_name for t in test_map.existing_tests[:2]) if test_map.existing_tests else 'local unit test suite'}.",
-        "4. Follow the bounded impact simulation to ensure modifications do not break downstream consumers.",
-        "5. Write a regression test for the specific bug case before submitting a pull request.",
+    # 4. Generate key components dictionary for plain-English orientation
+    key_comp_dict: Dict[str, str] = {}
+    for comp in rec.relevant_components[:6]:
+        key_comp_dict[comp.label] = (
+            comp.relevance_reason
+            or f"Verified AST symbol in {comp.file_path}"
+        )
+
+    # 5. Generate structured contribution guide steps
+    entry_file = unique_files[0] if unique_files else "entry point"
+    first_comp = rec.relevant_components[0] if rec.relevant_components else None
+    second_comp = rec.relevant_components[1] if len(rec.relevant_components) > 1 else first_comp
+
+    structured_steps = [
+        FirstContributionStep(
+            step_number=1,
+            title=f"Inspect Entry Point in {entry_file}",
+            description=f"Start by inspecting {entry_file} where the core symbol or affected component is defined.",
+            recommended_file=entry_file,
+            target_node_id=first_comp.node_id if first_comp else None,
+            verified_symbol=first_comp.label if first_comp else None,
+            evidence_badge="Verified AST Entry",
+        ),
+        FirstContributionStep(
+            step_number=2,
+            title="Review Relationships on Interactive Canvas",
+            description="Examine the verified AST symbols and their caller/callee relationships highlighted on the interactive canvas.",
+            recommended_file=unique_files[1] if len(unique_files) > 1 else entry_file,
+            target_node_id=second_comp.node_id if second_comp else None,
+            verified_symbol=second_comp.label if second_comp else None,
+            evidence_badge="Confirmed AST Edge",
+        ),
+        FirstContributionStep(
+            step_number=3,
+            title="Execute Targeted Regression Tests",
+            description=f"Run the targeted existing tests: {', '.join(t.test_name for t in test_map.existing_tests[:2]) if test_map.existing_tests else 'local test suite'}.",
+            recommended_file=test_map.existing_tests[0].test_file if test_map.existing_tests else "",
+            target_node_id=test_map.existing_tests[0].test_node_id if test_map.existing_tests else None,
+            verified_symbol=test_map.existing_tests[0].test_name if test_map.existing_tests else None,
+            evidence_badge="Existing Test",
+        ),
+        FirstContributionStep(
+            step_number=4,
+            title="Simulate Downstream Change Impact",
+            description="Use the Change Impact Simulator to ensure proposed changes do not break downstream callers or transitively dependent modules.",
+            recommended_file=entry_file,
+            target_node_id=first_comp.node_id if first_comp else None,
+            verified_symbol=first_comp.label if first_comp else None,
+            evidence_badge="Bounded Simulation",
+        ),
+        FirstContributionStep(
+            step_number=5,
+            title="Write Targeted Regression Test for Issue",
+            description="Write a reproduction unit test for the specific bug or task case before opening a Pull Request.",
+            recommended_file=test_map.existing_tests[0].test_file if test_map.existing_tests else "tests/",
+            target_node_id=None,
+            verified_symbol=None,
+            evidence_badge="Proposed Test",
+        ),
     ]
 
+    overview_text = rec.reasoning_summary or "Grounded first contribution onboarding plan based on repository code relationships."
+
     return FirstContributionPlan(
+        repository_id=repository_id,
         issue_title=req.issue_text[:80] + ("..." if len(req.issue_text) > 80 else ""),
-        overview=rec.reasoning_summary or "Grounded first contribution onboarding plan based on repository code relationships.",
-        reading_order_files=file_explanations,
-        key_components=rec.relevant_components[:6],
+        beginner_summary=overview_text,
+        overview=overview_text,
+        reading_order_files=unique_files[:5],
+        key_components=key_comp_dict,
+        step_by_step_guide=structured_steps,
         recommended_existing_tests=test_map.existing_tests[:4],
+        suggested_tests=rec.suggested_tests[:3] or [t.test_name for t in test_map.existing_tests[:3]],
         proposed_tests=rec.suggested_tests[:3],
-        step_by_step_guide=guide_steps,
+        cautionary_notes=rec.uncertainties if rec.uncertainties else [
+            "Static AST relationships only; runtime reflection and dynamic dispatch are not statically traced.",
+            "Verify all test executions locally before committing changes."
+        ],
     )
 
 

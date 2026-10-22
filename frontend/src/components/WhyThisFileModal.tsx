@@ -165,132 +165,144 @@ export const WhyThisFileModal: React.FC<WhyThisFileModalProps> = ({
             </div>
           )}
 
-          {data && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              {/* Primary Reason */}
-              <div>
-                <div style={{ fontWeight: 800, fontSize: '0.8rem', color: 'var(--color-ink-muted)', marginBottom: '0.35rem' }}>
-                  RELEVANCE EXPLANATION
-                </div>
-                <p style={{ fontSize: '0.9rem', lineHeight: 1.5, margin: 0 }}>
-                  {data.relevance_reason}
-                </p>
-              </div>
+          {data && (() => {
+            const matchedTerms = data.matched_terms || (data as any).matched_keywords || [];
+            const verifiedSymbols = data.verified_symbols || [];
+            const connectingEdges = data.connecting_edges || [];
+            const sourceLocations = data.source_locations || ((data as any).source_snippet ? [(data as any).source_snippet] : []);
+            const missingEvidence = Array.isArray(data.missing_evidence)
+              ? data.missing_evidence
+              : data.missing_evidence
+              ? [String(data.missing_evidence)]
+              : [];
 
-              {/* Matched Issue Terms */}
-              {data.matched_terms.length > 0 && (
+            return (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                {/* Primary Reason */}
                 <div>
                   <div style={{ fontWeight: 800, fontSize: '0.8rem', color: 'var(--color-ink-muted)', marginBottom: '0.35rem' }}>
-                    MATCHED ISSUE CONTEXT
+                    RELEVANCE EXPLANATION
                   </div>
-                  <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
-                    {data.matched_terms.map((term, i) => (
-                      <span key={i} className="badge badge-lime" style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem' }}>
-                        {term}
-                      </span>
-                    ))}
-                  </div>
+                  <p style={{ fontSize: '0.9rem', lineHeight: 1.5, margin: 0 }}>
+                    {data.relevance_reason}
+                  </p>
                 </div>
-              )}
 
-              {/* Verified Symbols in this File */}
-              {data.verified_symbols.length > 0 && (
-                <div>
-                  <div style={{ fontWeight: 800, fontSize: '0.8rem', color: 'var(--color-ink-muted)', marginBottom: '0.35rem' }}>
-                    VERIFIED AST SYMBOLS ({data.verified_symbols.length})
+                {/* Matched Issue Terms */}
+                {matchedTerms.length > 0 && (
+                  <div>
+                    <div style={{ fontWeight: 800, fontSize: '0.8rem', color: 'var(--color-ink-muted)', marginBottom: '0.35rem' }}>
+                      MATCHED ISSUE CONTEXT
+                    </div>
+                    <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                      {matchedTerms.map((term, i) => (
+                        <span key={i} className="badge badge-lime" style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem' }}>
+                          {term}
+                        </span>
+                      ))}
+                    </div>
                   </div>
-                  <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
-                    {data.verified_symbols.map((sym, i) => (
-                      <span
-                        key={i}
-                        className="badge"
-                        style={{
-                          backgroundColor: '#FFFFFF',
-                          fontFamily: 'var(--font-mono)',
-                          fontSize: '0.75rem',
-                        }}
-                      >
-                        <CheckCircle size={10} color="#2E7D32" />
-                        {sym}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
+                )}
 
-              {/* Connecting Graph Edges */}
-              {data.connecting_edges.length > 0 && (
-                <div>
-                  <div style={{ fontWeight: 800, fontSize: '0.8rem', color: 'var(--color-ink-muted)', marginBottom: '0.35rem' }}>
-                    CONNECTING GRAPH RELATIONSHIPS
+                {/* Verified Symbols in this File */}
+                {verifiedSymbols.length > 0 && (
+                  <div>
+                    <div style={{ fontWeight: 800, fontSize: '0.8rem', color: 'var(--color-ink-muted)', marginBottom: '0.35rem' }}>
+                      VERIFIED AST SYMBOLS ({verifiedSymbols.length})
+                    </div>
+                    <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                      {verifiedSymbols.map((sym, i) => (
+                        <span
+                          key={i}
+                          className="badge"
+                          style={{
+                            backgroundColor: '#FFFFFF',
+                            fontFamily: 'var(--font-mono)',
+                            fontSize: '0.75rem',
+                          }}
+                        >
+                          <CheckCircle size={10} color="#2E7D32" />
+                          {sym}
+                        </span>
+                      ))}
+                    </div>
                   </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-                    {data.connecting_edges.map((edge, i) => (
-                      <div
-                        key={i}
-                        style={{
-                          padding: '0.35rem 0.6rem',
-                          border: '1px solid var(--color-ink)',
-                          backgroundColor: 'var(--color-paper)',
-                          fontFamily: 'var(--font-mono)',
-                          fontSize: '0.75rem',
-                        }}
-                      >
-                        {edge}
+                )}
+
+                {/* Connecting Graph Edges */}
+                {connectingEdges.length > 0 && (
+                  <div>
+                    <div style={{ fontWeight: 800, fontSize: '0.8rem', color: 'var(--color-ink-muted)', marginBottom: '0.35rem' }}>
+                      CONNECTING GRAPH RELATIONSHIPS
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                      {connectingEdges.map((edge, i) => (
+                        <div
+                          key={i}
+                          style={{
+                            padding: '0.35rem 0.6rem',
+                            border: '1px solid var(--color-ink)',
+                            backgroundColor: 'var(--color-paper)',
+                            fontFamily: 'var(--font-mono)',
+                            fontSize: '0.75rem',
+                          }}
+                        >
+                          {edge}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Source Locations */}
+                {sourceLocations.length > 0 && (
+                  <div>
+                    <div style={{ fontWeight: 800, fontSize: '0.8rem', color: 'var(--color-ink-muted)', marginBottom: '0.35rem' }}>
+                      INDEXED SOURCE LOCATIONS
+                    </div>
+                    <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                      {sourceLocations.map((loc, i) => (
+                        <span
+                          key={i}
+                          style={{
+                            fontFamily: 'var(--font-mono)',
+                            fontSize: '0.75rem',
+                            padding: '0.1rem 0.4rem',
+                            backgroundColor: '#FFFFFF',
+                            border: '1px dashed var(--color-ink)',
+                          }}
+                        >
+                          {loc}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Caveats & Missing Evidence */}
+                {missingEvidence.length > 0 && (
+                  <div
+                    style={{
+                      padding: '0.65rem 0.85rem',
+                      backgroundColor: '#FFFDF0',
+                      border: '1px solid #FFE082',
+                      fontSize: '0.8rem',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontWeight: 800, marginBottom: '0.2rem' }}>
+                      <AlertTriangle size={12} color="#F57C00" />
+                      <span>CAVEATS & UNVERIFIED ASPECTS</span>
+                    </div>
+                    {missingEvidence.map((caveat, i) => (
+                      <div key={i} style={{ color: 'var(--color-ink-muted)' }}>
+                        • {caveat}
                       </div>
                     ))}
                   </div>
-                </div>
-              )}
-
-              {/* Source Locations */}
-              {data.source_locations.length > 0 && (
-                <div>
-                  <div style={{ fontWeight: 800, fontSize: '0.8rem', color: 'var(--color-ink-muted)', marginBottom: '0.35rem' }}>
-                    INDEXED SOURCE LOCATIONS
-                  </div>
-                  <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
-                    {data.source_locations.map((loc, i) => (
-                      <span
-                        key={i}
-                        style={{
-                          fontFamily: 'var(--font-mono)',
-                          fontSize: '0.75rem',
-                          padding: '0.1rem 0.4rem',
-                          backgroundColor: '#FFFFFF',
-                          border: '1px dashed var(--color-ink)',
-                        }}
-                      >
-                        {loc}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Caveats & Missing Evidence */}
-              {data.missing_evidence.length > 0 && (
-                <div
-                  style={{
-                    padding: '0.65rem 0.85rem',
-                    backgroundColor: '#FFFDF0',
-                    border: '1px solid #FFE082',
-                    fontSize: '0.8rem',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontWeight: 800, marginBottom: '0.2rem' }}>
-                    <AlertTriangle size={12} color="#F57C00" />
-                    <span>CAVEATS & UNVERIFIED ASPECTS</span>
-                  </div>
-                  {data.missing_evidence.map((caveat, i) => (
-                    <div key={i} style={{ color: 'var(--color-ink-muted)' }}>
-                      • {caveat}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
+                )}
+              </div>
+            );
+          })()}
         </div>
       </div>
     </div>
