@@ -1,0 +1,231 @@
+:root {
+  --color-paper: #F7F3E8;
+  --color-ink: #222222;
+  --color-ink-muted: #555555;
+  --color-ink-faint: #888888;
+  --color-electric-lime: #B8F56A;
+  --color-cobalt-blue: #789BFF;
+  --color-coral: #FF8A65;
+  --color-card-bg: #FFFFFF;
+  --color-border: #222222;
+  --color-shadow: #222222;
+  
+  --border-thick: 2px solid var(--color-border);
+  --border-thin: 1px solid var(--color-border);
+  --shadow-offset: 3px 3px 0px var(--color-shadow);
+  --shadow-offset-lg: 5px 5px 0px var(--color-shadow);
+  --shadow-offset-sm: 2px 2px 0px var(--color-shadow);
+  
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* Typography */
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--color-ink);
+}
+
+code, pre, .font-mono {
+  font-family: var(--font-mono);
+}
+
+/* Neo-brutalist buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  font-weight: 700;
+  font-size: 0.95rem;
+  padding: 0.65rem 1.25rem;
+  border: var(--border-thick);
+  background-color: var(--color-card-bg);
+  color: var(--color-ink);
+  box-shadow: var(--shadow-offset);
+  cursor: pointer;
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+  text-decoration: none;
+  user-select: none;
+}
+
+.btn:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 4px 4px 0px var(--color-shadow);
+}
+
+.btn:active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0px var(--color-shadow);
+}
+
+.btn:focus-visible {
+  outline: 3px solid var(--color-cobalt-blue);
+  outline-offset: 2px;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: var(--shadow-offset);
+}
+
+.btn-primary {
+  background-color: var(--color-electric-lime);
+}
+
+.btn-blue {
+  background-color: var(--color-cobalt-blue);
+}
+
+.btn-coral {
+  background-color: var(--color-coral);
+}
+
+/* Neo-brutalist Inputs */
+.input {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: var(--border-thick);
+  background-color: #FFFFFF;
+  color: var(--color-ink);
+  font-size: 1rem;
+  font-family: var(--font-mono);
+  box-shadow: var(--shadow-offset-sm);
+  outline: none;
+  transition: box-shadow 0.1s ease;
+}
+
+.input:focus {
+  box-shadow: var(--shadow-offset);
+  border-color: var(--color-ink);
+  outline: 2px solid var(--color-cobalt-blue);
+}
+
+/* Neo-brutalist Cards */
+.card {
+  background-color: var(--color-card-bg);
+  border: var(--border-thick);
+  box-shadow: var(--shadow-offset);
+  padding: 1.5rem;
+}
+
+.card-paper {
+  background-color: var(--color-paper);
+}
+
+.card-lime {
+  background-color: var(--color-electric-lime);
+}
+
+.card-blue {
+  background-color: var(--color-cobalt-blue);
+}
+
+.card-coral {
+  background-color: var(--color-coral);
+}
+
+/* Badges / Chips */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0.2rem 0.55rem;
+  border: var(--border-thin);
+  border-radius: 2px;
+  background-color: var(--color-card-bg);
+  box-shadow: 1px 1px 0px var(--color-shadow);
+}
+
+.badge-lime {
+  background-color: var(--color-electric-lime);
+}
+
+.badge-blue {
+  background-color: var(--color-cobalt-blue);
+}
+
+.badge-coral {
+  background-color: var(--color-coral);
+}
+
+/* React Flow Canvas Customization */
+.react-flow__renderer {
+  background-color: var(--color-paper) !important;
+}
+
+.react-flow__controls {
+  border: var(--border-thick) !important;
+  box-shadow: var(--shadow-offset) !important;
+  border-radius: 0 !important;
+  background: #FFFFFF !important;
+  overflow: hidden;
+}
+
+.react-flow__controls-button {
+  border-bottom: var(--border-thin) !important;
+  background: #FFFFFF !important;
+  border-radius: 0 !important;
+}
+
+.react-flow__controls-button:hover {
+  background: var(--color-electric-lime) !important;
+}
+
+.react-flow__edge-path {
+  stroke: var(--color-ink) !important;
+  stroke-width: 2 !important;
+}
+
+.react-flow__edge.inferred .react-flow__edge-path {
+  stroke-dasharray: 4 4 !important;
+  stroke: var(--color-ink-muted) !important;
+}
+
+.react-flow__edge.highlighted .react-flow__edge-path {
+  stroke: var(--color-electric-lime) !important;
+  stroke-width: 4 !important;
+}
+
+.react-flow__edge.impact .react-flow__edge-path {
+  stroke: var(--color-coral) !important;
+  stroke-width: 3 !important;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-paper);
+  border-left: var(--border-thin);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-ink);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-ink-muted);
+}

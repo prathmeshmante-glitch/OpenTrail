@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHON_EXECUTABLE=python
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - GEMMA_MODEL=gemma-4-26b-a4b-it
+      - FRONTEND_ORIGIN=http://localhost:5173
+      - MAX_REPOSITORY_SIZE_MB=50
+      - MAX_REPOSITORY_FILES=1000
+      - MAX_GRAPH_NODES=3000
+      - JOB_TIMEOUT_SECONDS=120
+    restart: unless-stopped
